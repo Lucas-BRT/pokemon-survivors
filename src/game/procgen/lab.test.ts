@@ -2,6 +2,7 @@ import { describe, it } from 'vitest'
 import { createRng } from '../../engine/rng'
 import { MAZE } from '../../data/landmarks'
 import { MAZE_PATTERNS } from '../landmarkLayout'
+import { DUNGEON, generateFloor, generateFloorV2, roomDistances, type DungeonFloor } from '../dungeon'
 import { generateMaze, mazeMetrics, type MazeLayout, type MazeMetrics, type MazeStyle } from './maze'
 
 /**
@@ -76,6 +77,38 @@ describe.skipIf(!import.meta.env.VITE_LAB)('procgen lab: mazes', () => {
       out.push(name, ascii(generateMaze(createRng(7), style)), '')
     }
     out.push('atual, padrao 0:', ascii(baseline(0)))
+    console.log('\n' + out.join('\n'))
+  })
+})
+
+/** What a cave floor is like: rooms, corridors, loops, the walk from the start to the stairs, the floor's size in px. */
+const floorMetrics = (f: DungeonFloor) => {
+  const dist = roomDistances(f, [f.startRoom])
+  const xs = f.rooms.flatMap((r) => [r.x, r.x + r.w])
+  const ys = f.rooms.flatMap((r) => [r.y, r.y + r.h])
+  return {
+    rooms: f.rooms.length,
+    loops: f.links.length - (f.rooms.length - 1),
+    hops: dist[f.stairsRoom]!,
+    area: f.rooms.reduce((a, r) => a + r.w * r.h, 0) / 1000,
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys),
+    ambush: f.ambush.length,
+    items: f.items.length + f.prizes.length,
+  }
+}
+
+describe.skipIf(!import.meta.env.VITE_LAB)('procgen lab: cave floors', () => {
+  it('compares the hand-made floors with the generated ones', () => {
+    const out = [`${'andar'.padEnd(26)} ${['salas', 'lacos', 'saltos', 'area k', 'larg', 'alt', 'embosc', 'itens'].map((h) => h.padStart(7)).join(' ')}`]
+    const row = (name: string, fs: readonly DungeonFloor[]) => {
+      const ms = fs.map(floorMetrics)
+      const m = (k: keyof ReturnType<typeof floorMetrics>) => mean(ms.map((x) => x[k]))
+      out.push(`${name.padEnd(26)} ${(['rooms', 'loops', 'hops', 'area', 'width', 'height', 'ambush', 'items'] as const).map((k) => fixed(m(k)).padStart(7)).join(' ')}`)
+    }
+    const seeds = Array.from({ length: 200 }, (_, i) => i + 1)
+    for (const i of [0, 1]) row(`atual B${i + 1}F (grade ${DUNGEON.grids[i]!.cols}x${DUNGEON.grids[i]!.rows})`, seeds.map((sd) => generateFloor(createRng(sd), i)))
+    for (const i of [0, 1, 2]) row(`gerado B${i + 1}F`, seeds.map((sd) => generateFloorV2(createRng(sd), i)))
     console.log('\n' + out.join('\n'))
   })
 })
