@@ -151,10 +151,11 @@ export type MazeLayout = { maze: MazeGrid; entrance: Cell & { side: 0 | 1 | 2 | 
  * with the longest walk between them, so the heart is never a few steps from
  * the door (the walk is at least half the maze's diameter, since no cell is
  * closer to everything than that). Ties go to the first in a seeded shuffle.
+ * `sides` limits where the way in can be (0 north, 1 east, 2 south, 3 west).
  * Opens the way in on the edge wall.
  */
-export const placeEnds = (rng: Rng, maze: MazeGrid): MazeLayout => {
-  const edges = edgeCells(maze)
+export const placeEnds = (rng: Rng, maze: MazeGrid, sides: readonly (0 | 1 | 2 | 3)[] = [0, 1, 2, 3]): MazeLayout => {
+  const edges = edgeCells(maze).filter((e) => sides.includes(e.side))
   for (let i = edges.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
     ;[edges[i], edges[j]] = [edges[j]!, edges[i]!]
@@ -179,13 +180,15 @@ export type MazeStyle = {
   newest: number
   /** Share of dead ends given a second way out. */
   braid: number
+  /** Sides the way in may open on (any when left out). */
+  sides?: readonly (0 | 1 | 2 | 3)[]
 }
 
 /** A maze of the given style, its way in and its treasure placed. */
 export const generateMaze = (rng: Rng, style: MazeStyle): MazeLayout => {
   const maze = growingTree(rng, style.cols, style.rows, style.newest)
   if (style.braid > 0) braid(rng, maze, style.braid)
-  return placeEnds(rng, maze)
+  return placeEnds(rng, maze, style.sides)
 }
 
 export type MazeMetrics = {

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { LANDMARK, LANDMARK_IDS, MAZE, TUNNEL } from '../data/landmarks'
+import { LANDMARK, LANDMARK_IDS, MAZE, MAZE_COUNT, TUNNEL } from '../data/landmarks'
+import { PROCGEN } from '../data/procgen'
 import { TERRAIN } from '../data/terrain'
 import { spawnEnemy, updateEnemies } from './enemies'
 import { createGame, step } from './game'
-import { carveMaze, MAZE_PATTERNS } from './landmarkLayout'
+import { carveMaze, MAZE_LAYOUTS, MAZE_PATTERNS } from './landmarkLayout'
+import { distances, mazeMetrics } from './procgen/maze'
 import { updateLandmarks, updateTunnel } from './landmarks'
 import { createTerrain, featureAt, type Landmark } from './terrain'
 import type { Game } from './types'
@@ -55,6 +57,22 @@ describe('landmark layouts', () => {
     }
     expect(carveMaze(5)).toEqual(carveMaze(5))
     expect(new Set(MAZE_PATTERNS.map((w) => JSON.stringify(w))).size).toBe(MAZE.patterns)
+  })
+
+  it('lays out the mazes a run picks from: every cell reachable from the way in, shut on all sides but it, the chest far from the door', () => {
+    expect(MAZE_LAYOUTS).toHaveLength(MAZE_COUNT)
+    for (const layout of MAZE_LAYOUTS) {
+      const { maze, entrance, goal } = layout
+      const { dist } = distances(maze, entrance.c, entrance.r)
+      expect(dist.every((d) => d >= 0)).toBe(true)
+      expect(dist[goal.r * maze.cols + goal.c]).toBeGreaterThan(0)
+      // The only gap in the outer hedge is the way in, on the south side.
+      const open = [...maze.h[0]!, ...maze.h[maze.rows]!, ...maze.v.map((row) => row[0]!), ...maze.v.map((row) => row[maze.cols]!)].filter((w) => !w).length
+      expect(open).toBe(1)
+      expect(maze.h[maze.rows]![entrance.c]).toBe(false)
+      expect(entrance.r).toBe(maze.rows - 1)
+      if (PROCGEN.maze) expect(mazeMetrics(layout).reach).toBeGreaterThan(0.6)
+    }
   })
 
   it('places at most one landmark per block, every kind of them, the same from the same seed', () => {

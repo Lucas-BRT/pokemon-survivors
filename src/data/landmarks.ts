@@ -1,4 +1,5 @@
 import type { DropSource } from './consumables'
+import { PROCGEN } from './procgen'
 
 /**
  * Landmarks: the map's points of interest. Each stands in a terrain cell the
@@ -80,3 +81,7 @@ export const MAZE = {
   /** Distinct mazes: each run's mazes come from these, so their art is built once. */
   patterns: 6,
 } as const
+
+/** The maze's cells per side and how many distinct mazes a run picks from: the generated ones (`data/procgen.ts`) or the six fixed patterns. */
+export const MAZE_DIM = PROCGEN.maze ? PROCGEN.mazeSize : MAZE.size
+export const MAZE_COUNT = PROCGEN.maze ? PROCGEN.mazePatterns : MAZE.patterns

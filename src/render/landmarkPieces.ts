@@ -1,7 +1,7 @@
 import type { BiomeId } from '../data/biomes'
-import { MAZE, type LandmarkGround, type LandmarkPiece } from '../data/landmarks'
+import { MAZE, MAZE_COUNT, MAZE_DIM, type LandmarkGround, type LandmarkPiece } from '../data/landmarks'
 import type { Ellipse } from '../data/terrain'
-import { COTTAGE, hedgeRow, MAZE_PATTERNS, RIDGE, RUINS } from '../game/landmarkLayout'
+import { COTTAGE, hedgeRow, MAZE_LAYOUTS, RIDGE, RUINS } from '../game/landmarkLayout'
 import { mineArch, over, PLACE_PIECES } from './placePieces'
 import { cylinder, grid, lambert, limb, noise, outline, put, sculpt, shade, stamp, toSprite, wobble, type Blob, type Grid, type Ramp } from './sculpt'
 import { brokenPillar, mountainOf, ROCK_SKINS, type Piece } from './terrain'
@@ -426,16 +426,18 @@ const leafy = (skin: Skin, seed: number): BlockPaint => (fx, fy, e, h, top) => {
 
 /** One row line of a maze's hedges (`hedgeRow`), topiary balls on the posts at its way in. */
 const hedge = (skin: Skin, variant: number): Piece => {
-  const pattern = Math.floor(variant / 8) % MAZE.patterns
+  const pattern = Math.floor(variant / 8) % MAZE_COUNT
   const row = variant % 8
   const S = MAZE.cell
-  const rowY = -MAZE.size * S + row * S
-  const rects = hedgeRow(MAZE_PATTERNS[pattern]!, row).map(rectOf)
+  const { maze, entrance } = MAZE_LAYOUTS[pattern]!
+  const rowY = -MAZE_DIM * S + row * S
+  const rects = hedgeRow(maze, row).map(rectOf)
   const H = 15
   const { g, ox, oy, anchor } = extrude(rects, (fx, fy) => H + Math.round(noise(fx >> 1, fy >> 2, 9 + pattern) * 2), H + 2, leafy(skin, 40 + row), 0, rowY, 8)
-  if (row === MAZE.size) {
-    // Topiary balls crown the two posts of the way in.
-    for (const x of [-S / 2, S / 2]) sculpt(g, [{ x: ox + x + 0.5, y: oy + rowY - H - 5, rx: 6, ry: 6 }], skin.snow ? skin.hedgeTop : skin.hedge, { tag: 9, seed: 4 })
+  if (row === maze.rows) {
+    // Topiary balls crown the two posts of the way in (on the south side, where it always is).
+    const mid = (entrance.c + 0.5 - maze.cols / 2) * S
+    for (const x of [mid - S / 2, mid + S / 2]) sculpt(g, [{ x: ox + x + 0.5, y: oy + rowY - H - 5, rx: 6, ry: 6 }], skin.snow ? skin.hedgeTop : skin.hedge, { tag: 9, seed: 4 })
   }
   outline(g, skin.outline)
   return piece(g, anchor.ax, anchor.ay)
@@ -717,11 +719,13 @@ const rails = (skin: Skin): Piece =>
   })
 
 /** Gravel paths through the maze and a flagstone at its way in. */
-const gravel = (skin: Skin): Piece => {
-  const half = (MAZE.size * MAZE.cell) / 2
+const gravel = (skin: Skin, variant: number): Piece => {
+  const half = (MAZE_DIM * MAZE.cell) / 2
+  const { maze, entrance } = MAZE_LAYOUTS[variant % MAZE_COUNT]!
+  const inX = (entrance.c + 0.5 - maze.cols / 2) * MAZE.cell
   return flat(-half - 6, -half * 2 - 6, half + 6, 14, (x, y) => {
     // Two worn steps at the way in.
-    if (y > 0) return Math.abs(x) < 13 && y < 11 ? (y === 5 || y === 10 ? skin.stone[1]! : shade(skin.stone, 0.85, x, y)) : null
+    if (y > 0) return Math.abs(x - inX) < 13 && y < 11 ? (y === 5 || y === 10 ? skin.stone[1]! : shade(skin.stone, 0.85, x, y)) : null
     if (Math.abs(x) > half + 4 || y < -half * 2 - 4) return null
     const edge = Math.abs(x) > half + 2 || y < -half * 2 - 2
     return edge ? shade(skin.stone, 0.4, x, y) : shade(skin.gravel, 0.3 + noise(x, y, 6) * 0.6, x, y)
@@ -791,7 +795,7 @@ export const LANDMARK_PIECES: Record<LandmarkPiece, (variant: number, biome: Bio
 export const LANDMARK_GROUNDS: Record<LandmarkGround, (variant: number, biome: BiomeId) => Piece> = {
   floor: (v, b) => floor(SKINS[b], v),
   rails: (_v, b) => rails(SKINS[b]),
-  gravel: (_v, b) => gravel(SKINS[b]),
+  gravel: (v, b) => gravel(SKINS[b], v),
   plaza: (v, b) => plaza(SKINS[b], v),
   camp: (v, b) => campGround(SKINS[b], v),
 }
@@ -811,5 +815,5 @@ export const LANDMARK_TALL: Record<LandmarkPiece, boolean> = {
 /** Pieces a run will likely meet, per biome, to sculpt in idle time before they show (`warmTerrain`). */
 export const LANDMARK_WARM: readonly (readonly [LandmarkPiece, number])[] = [
   ['ridge', 0], ['wallN', 0], ['wallW', 0], ['wallE', 0], ['wallS', 0], ['wallS', 1], ['tent', 0], ['tent', 1], ['altar', 0],
-  ...Array.from({ length: MAZE.patterns * (MAZE.size + 1) }, (_, i) => ['hedge', Math.floor(i / (MAZE.size + 1)) * 8 + (i % (MAZE.size + 1))] as const),
+  ...Array.from({ length: MAZE_COUNT * (MAZE_DIM + 1) }, (_, i) => ['hedge', Math.floor(i / (MAZE_DIM + 1)) * 8 + (i % (MAZE_DIM + 1))] as const),
 ]

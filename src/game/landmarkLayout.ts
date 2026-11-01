@@ -1,7 +1,9 @@
 import { createRng } from '../engine/rng'
-import { MAZE, type LandmarkGround, type LandmarkId, type LandmarkPiece } from '../data/landmarks'
+import { MAZE, MAZE_COUNT, MAZE_DIM, type LandmarkGround, type LandmarkId, type LandmarkPiece } from '../data/landmarks'
 import type { Ellipse } from '../data/terrain'
 import * as dm from '../engine/dmath'
+import { PROCGEN } from '../data/procgen'
+import { generateMaze, type MazeLayout } from './procgen/maze'
 
 /**
  * Where each landmark's pieces stand, around its anchor (world px, before
@@ -25,7 +27,7 @@ export type LandmarkPlan = {
 }
 
 /** Looks of each landmark (`landmarkPlan`'s `variant`). */
-export const LANDMARK_VARIANTS: Record<LandmarkId, number> = { cottage: 2, tunnel: 1, maze: MAZE.patterns, ruins: 2, camp: 2 }
+export const LANDMARK_VARIANTS: Record<LandmarkId, number> = { cottage: 2, tunnel: 1, maze: MAZE_COUNT, ruins: 2, camp: 2 }
 
 /** A straight wall from (x0, y0) to (x1, y1), along x or along y, as a chain of ellipses `half` px thick. */
 export const wallFoot = (x0: number, y0: number, x1: number, y1: number, half: number): Ellipse[] => {
@@ -157,8 +159,27 @@ export const carveMaze = (seed: number, n = MAZE.size): MazeWalls => {
 /** The mazes a run picks from, carved once. */
 export const MAZE_PATTERNS: readonly MazeWalls[] = Array.from({ length: MAZE.patterns }, (_, i) => carveMaze(7001 + i * 31))
 
-/** Where the maze's corridors start (its north-west corner), around its anchor at the middle of the way in. */
-const mazeOrigin = () => ({ x: -(MAZE.size * MAZE.cell) / 2, y: -MAZE.size * MAZE.cell })
+/** The six hand-picked mazes as layouts: in at the south middle, the chest at the heart. */
+const legacyLayout = (w: MazeWalls): MazeLayout => {
+  const n = MAZE.size
+  const mid = Math.floor(n / 2)
+  return { maze: { cols: n, rows: n, h: w.h, v: w.v }, entrance: { c: mid, r: n - 1, side: 2 }, goal: { c: mid, r: mid } }
+}
+
+/**
+ * The mazes a run's landmarks pick from: generated from fixed seeds (`procgen/maze.ts`,
+ * styles and size in `data/procgen.ts`, the way in always on the south side where
+ * the anchor and the flagstone are), or the legacy patterns when `PROCGEN.maze` is off.
+ */
+export const MAZE_LAYOUTS: readonly MazeLayout[] = PROCGEN.maze
+  ? Array.from({ length: PROCGEN.mazePatterns }, (_, i) => {
+      const style = PROCGEN.mazeStyles[i % PROCGEN.mazeStyles.length]!
+      return generateMaze(createRng(7001 + i * 31), { cols: PROCGEN.mazeSize, rows: PROCGEN.mazeSize, newest: style.newest, braid: style.braid, sides: [2] })
+    })
+  : MAZE_PATTERNS.map(legacyLayout)
+
+/** Where the maze's corridors start (its north-west corner), around its anchor at the middle of the south side. */
+export const mazeOrigin = (cols: number = MAZE_DIM, rows: number = MAZE_DIM) => ({ x: -(cols * MAZE.cell) / 2, y: -rows * MAZE.cell })
 
 /**
  * The hedges of one row line of a maze (`row` 0 is its north edge, `size` its
@@ -167,8 +188,9 @@ const mazeOrigin = () => ({ x: -(MAZE.size * MAZE.cell) / 2, y: -MAZE.size * MAZ
  * the hedges south of them and in front of the rest.
  */
 export const hedgeRow = (walls: MazeWalls, row: number): Ellipse[] => {
-  const { cell: S, wall: T, size: n } = MAZE
-  const o = mazeOrigin()
+  const { cell: S, wall: T } = MAZE
+  const n = walls.h[0]!.length
+  const o = mazeOrigin(n, walls.v.length)
   const foot: Ellipse[] = []
   const y = o.y + row * S
   for (let c = 0; c < n; c++) if (walls.h[row]![c]) foot.push(ellipseAt(o.x + (c + 0.5) * S, y, S / 2 + 1, T))
@@ -182,12 +204,12 @@ export const hedgeRow = (walls: MazeWalls, row: number): Ellipse[] => {
 
 /** A hedge maze with a chest at its heart, one of `MAZE_PATTERNS`. */
 const maze = (variant: number): LandmarkPlan => {
-  const walls = MAZE_PATTERNS[variant % MAZE.patterns]!
-  const o = mazeOrigin()
-  const heart = { x: 0, y: o.y + (MAZE.size * MAZE.cell) / 2 - 2 }
+  const { maze: walls, goal } = MAZE_LAYOUTS[variant % MAZE_COUNT]!
+  const o = mazeOrigin(walls.cols, walls.rows)
+  const heart = { x: o.x + (goal.c + 0.5) * MAZE.cell, y: o.y + (goal.r + 0.5) * MAZE.cell - 2 }
   return {
     pieces: [
-      ...Array.from({ length: MAZE.size + 1 }, (_, row): PiecePlan => ({ kind: 'hedge', x: 0, y: o.y + row * MAZE.cell, variant: variant * 8 + row, foot: hedgeRow(walls, row) })),
+      ...Array.from({ length: walls.rows + 1 }, (_, row): PiecePlan => ({ kind: 'hedge', x: 0, y: o.y + row * MAZE.cell, variant: variant * 8 + row, foot: hedgeRow(walls, row) })),
       { ...single('chest', heart.x, heart.y, 8, 4), loot: true },
     ],
     ground: { kind: 'gravel', variant, x: 0, y: 0 },
