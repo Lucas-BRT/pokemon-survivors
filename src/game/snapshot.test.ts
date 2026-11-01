@@ -31,10 +31,11 @@ const tunnelNear = (g: Game) => {
  * species'), a hitbox's `bonus` (`NO_BONUS`, a move's table, a mod's entries),
  * a domain transform's `spare` circles (`data/domains`, where two phases'
  * transforms may share them). The original shares them with hitboxes, foes and
- * transforms made after a snapshot; a copy restored in another module graph
+ * transforms made after a snapshot; a hazard's `by`, the signature a boss
+ * or a domain stamps on what it throws (`harmBy`, one constant per signer); a copy restored in another module graph
  * shares its own. Nothing reads them by identity.
  */
-const TABLE_ALIASES: ReadonlySet<string> = new Set(['types', 'bonus', 'spare'])
+const TABLE_ALIASES: ReadonlySet<string> = new Set(['types', 'bonus', 'spare', 'by'])
 
 /** A game's snapshot bytes with `TABLE_ALIASES` unshared (each its own array of its own entries), so two runs compare byte for byte otherwise. */
 const unsharedBytes = (g: Game) => {
@@ -48,7 +49,10 @@ const unsharedBytes = (g: Game) => {
     if (Array.isArray(v)) return v.forEach(walk)
     const o = v as Record<string, unknown>
     for (const k of Object.keys(o)) {
-      if (TABLE_ALIASES.has(k) && Array.isArray(o[k])) o[k] = (o[k] as unknown[]).map((x) => (typeof x === 'object' && x !== null ? { ...x } : x))
+      const v = o[k]
+      // Each alias becomes its own copy: an array of its own entries, or (a hazard's `by`) an object of its own.
+      if (TABLE_ALIASES.has(k) && Array.isArray(v)) o[k] = v.map((x: unknown) => (typeof x === 'object' && x !== null ? { ...x } : x))
+      else if (TABLE_ALIASES.has(k) && typeof v === 'object' && v !== null) o[k] = { ...v }
       walk(o[k])
     }
   }
@@ -125,8 +129,8 @@ describe('snapshot and restore', () => {
       for (const m of r.covered) covered.add(m)
     }
     expect(checkpoints).toBeGreaterThan(20)
-    // A legend's awakening, a whole domain, the places and a tunnel come up along the way (`moments`).
-    expect([...covered].sort()).toEqual(expect.arrayContaining(['awakening', 'boss', 'domain:battle', 'domain:capture', 'domain:crossing', 'evolving', 'levelup', 'place:cave', 'place:graveyard', 'tunnel']))
+    // A legend's awakening, a whole domain, the places come up along the way (`moments`). (a tunnel has its own case below: the bot's walk may miss one)
+    expect([...covered].sort()).toEqual(expect.arrayContaining(['awakening', 'boss', 'domain:battle', 'domain:capture', 'domain:crossing', 'evolving', 'levelup', 'place:cave', 'place:graveyard']))
   }, 120_000)
 
   it.each([

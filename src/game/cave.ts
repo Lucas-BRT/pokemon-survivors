@@ -3,8 +3,9 @@ import { range, weightedPick } from '../engine/rng'
 import type { Circle, FloorPlan, Pt } from '../data/arenas'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import { CAVE, PLACE_FEET, PLACE_LOOT } from '../data/places'
+import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { dropItem } from './consumables'
-import { floorShapes, generateFloor, type DungeonFloor } from './dungeon'
+import { floorShapes, generateFloor, generateFloorV2, roomAt, type DungeonFloor, type Rect } from './dungeon'
 import { burst, shakeScreen } from './effects'
 import { spawnEnemy } from './enemies'
 import { chestCoins } from './mapEventRules'
@@ -39,6 +40,9 @@ export type CaveState = {
   wind: number
   /** The treasure chamber's Monster House has sprung. */
   house: boolean
+  /** The floor's ambush rooms (`DungeonFloor.ambush`) and the ones that have sprung. */
+  ambush: readonly number[]
+  sprung: number[]
 }
 
 type CaveInside = PlaceInteriorOf<'cave'>
@@ -75,11 +79,16 @@ const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
       lights,
     }
   }
-  const plan = generateFloor(g.rng, index)
+  const plan = PROCGEN.cave ? generateFloorV2(g.rng, index) : generateFloor(g.rng, index)
   plan.items.forEach(([ix, iy], i) => {
     if (i === 0) dropCoins(g, x + ix, y + iy, [COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[0], COIN_VALUES[0]])
     else dropItem(g, x + ix, y + iy, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
   })
+  // An ambush room's prize: a pile of ₽ and something from an item ball, for whoever dares.
+  for (const [px, py] of plan.prizes) {
+    dropCoins(g, x + px, y + py, [COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[0]])
+    dropItem(g, x + px + 12, y + py, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
+  }
   return {
     layout: { floor: floorShapes(plan) },
     solids: [
@@ -94,7 +103,7 @@ const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
   }
 }
 
-const stateOf = (f: Floor, floor: number): CaveState => ({ floor, plan: f.plan, stairs: f.stairs, chest: f.chest, lights: f.lights, wind: 0, house: false })
+const stateOf = (f: Floor, floor: number): CaveState => ({ floor, plan: f.plan, stairs: f.stairs, chest: f.chest, lights: f.lights, wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [] })
 
 export const buildCave = (g: Game, x: number, y: number) => {
   const f = layFloor(g, x, y, 0)
@@ -115,7 +124,10 @@ export const descendCave = (g: Game, inside: CaveInside) => {
   const start = f.start
   inside.layout = f.layout
   inside.terrain = { solids: f.solids, lake: null }
-  inside.state = { ...stateOf(f, s.floor + 1), wind: s.wind }
+  const next = s.floor + 1
+  // The generated cave keeps a clock per floor, and the wind starts over with it.
+  if (PROCGEN.cave) inside.left = next >= CAVE.floors ? CAVE_GEN.chamberTime : CAVE_GEN.floorTime[Math.min(next, CAVE_GEN.floorTime.length - 1)]!
+  inside.state = { ...stateOf(f, next), wind: PROCGEN.cave ? 0 : s.wind }
   placeTeam(g, inside.x + start[0], inside.y + start[1])
   const p = anchorPlayer(g)
   for (const k of g.pickups) {
@@ -179,6 +191,21 @@ const springHouse = (g: Game, inside: CaveInside) => {
   notifyPlace(g, 'cave', { kind: 'monsterHouse' })
 }
 
+/** An ambush room's pack: wild Pokémon out of the dark all around the room at once. */
+const springAmbush = (g: Game, inside: CaveInside, room: Rect) => {
+  const count = CAVE_GEN.pack.base + CAVE_GEN.pack.perFloor * inside.state.floor
+  const cx = inside.x + room.x + room.w / 2
+  const cy = inside.y + room.y + room.h / 2
+  const offset = range(g.rng, 0, TAU)
+  const pool = placePool('cave', g.time)
+  for (let i = 0; i < count; i++) {
+    const a = offset + (i / count) * TAU
+    spawnEnemy(g, weightedPick(g.rng, pool), cx + dm.cos(a) * room.w * 0.4, cy + dm.sin(a) * room.h * 0.4)
+  }
+  shakeScreen(g, 4, { x: cx, y: cy })
+  notifyPlace(g, 'cave', { kind: 'monsterHouse' })
+}
+
 /** The chest opens: ₽, a Poké Ball, items and maybe an egg, then the way out. */
 const openChest = (g: Game, inside: CaveInside, chest: NonNullable<CaveState['chest']>) => {
   chest.open = true
@@ -216,6 +243,16 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
     s.wind++
     notifyPlace(g, 'cave', { kind: 'wind', level: s.wind })
   }
+  // The first player into an ambush room springs its pack.
+  const plan = s.plan
+  if (plan) {
+    for (const p of g.players) {
+      const room = roomAt(plan, p.x - inside.x, p.y - inside.y)
+      if (room < 0 || !s.ambush.includes(room) || s.sprung.includes(room)) continue
+      s.sprung.push(room)
+      springAmbush(g, inside, plan.rooms[room]!)
+    }
+  }
   // Any player at the stairs takes the team down; any player at the chest opens it.
   const stairs = s.stairs
   if (stairs) {
@@ -231,5 +268,5 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
     if (chest.progress > before && Math.floor(chest.progress * 5) !== Math.floor(before * 5)) notifyPlace(g, 'cave', { kind: 'chestTick' })
     if (chest.progress >= 1) return openChest(g, inside, chest)
   }
-  spawnInPlace(g, inside, dt, darkSpot(inside), s.plan ? 1 : 0.3)
+  spawnInPlace(g, inside, dt, darkSpot(inside), (s.plan ? 1 : 0.3) * (PROCGEN.cave ? 1 + CAVE_GEN.spawnPerFloor * s.floor : 1))
 }

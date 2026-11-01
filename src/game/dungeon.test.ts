@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createRng } from '../engine/rng'
 import { fits, keepOn } from './arenaFloor'
-import { dungeonNav, floorShapes, generateFloor, roomAt, roomDistances, type DungeonFloor } from './dungeon'
+import { CAVE_GEN } from '../data/procgen'
+import { dungeonNav, floorShapes, generateFloor, generateFloorV2, roomAt, roomDistances, type DungeonFloor } from './dungeon'
 
 const floors = (index: number) => Array.from({ length: 40 }, (_, seed) => generateFloor(createRng(seed + 1), index))
 
@@ -71,5 +72,55 @@ describe('dungeonNav', () => {
       expect(link).toBeDefined()
       expect(dist[link!.a === far ? link!.b : link!.a]).toBe(dist[far]! - 1)
     }
+  })
+})
+
+describe('generateFloorV2', () => {
+  const floors2 = (index: number) => Array.from({ length: 60 }, (_, seed) => generateFloorV2(createRng(seed + 1), index))
+
+  it('joins every room (some grid cells left empty), with loops to choose routes from, the stairs the most corridors away', () => {
+    for (const index of [0, 1, 2]) {
+      const grid = CAVE_GEN.grids[index]!
+      for (const f of floors2(index)) {
+        const dist = roomDistances(f, [f.startRoom])
+        expect(dist.every((d) => Number.isFinite(d))).toBe(true)
+        expect(dist[f.stairsRoom]).toBe(Math.max(...dist))
+        expect(f.rooms.length).toBeLessThan(grid.cols * grid.rows)
+        expect(f.rooms.length).toBeGreaterThanOrEqual(Math.floor(grid.cols * grid.rows * (1 - CAVE_GEN.drop[index]!)))
+        // A spanning tree has one corridor fewer than rooms; the rest are loops (a floor left with no spare neighbors has none).
+        expect(f.links.length).toBeGreaterThanOrEqual(f.rooms.length - 1)
+        expect(roomAt(f, ...f.stairs)).toBe(f.stairsRoom)
+        expect(roomAt(f, ...f.start)).toBe(f.startRoom)
+      }
+    }
+  })
+
+  it('gives nearly every floor loops, so there is a route to choose', () => {
+    for (const index of [0, 1, 2]) {
+      const fs = floors2(index)
+      expect(fs.filter((f) => f.links.length > f.rooms.length - 1).length).toBeGreaterThan(fs.length * 0.9)
+    }
+  })
+
+  it('sets rooms aside as ambushes, each with its prize inside it, never the start or the stairs', () => {
+    for (const index of [0, 1, 2]) {
+      for (const f of floors2(index)) {
+        expect(f.ambush).toHaveLength(CAVE_GEN.ambush[index]!)
+        expect(new Set(f.ambush).size).toBe(f.ambush.length)
+        expect(f.prizes).toHaveLength(f.ambush.length)
+        f.ambush.forEach((room, i) => {
+          expect(room).not.toBe(f.startRoom)
+          expect(room).not.toBe(f.stairsRoom)
+          expect(roomAt(f, ...f.prizes[i]!)).toBe(room)
+        })
+        for (const p of [...f.items, ...f.crystals, ...f.rocks, ...f.prizes]) expect(onFloor(f, p, 4)).toBe(true)
+      }
+    }
+  })
+
+  it('leaves room for the player along every corridor, and lays out the same floor from the same seed', () => {
+    for (const f of floors2(2)) for (const link of f.links) for (const [x, y] of link.path) expect(onFloor(f, [x, y], 12)).toBe(true)
+    expect(generateFloorV2(createRng(9), 2)).toEqual(generateFloorV2(createRng(9), 2))
+    expect(generateFloorV2(createRng(9), 2)).not.toEqual(generateFloorV2(createRng(10), 2))
   })
 })

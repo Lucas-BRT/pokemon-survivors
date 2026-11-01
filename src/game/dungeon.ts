@@ -1,6 +1,7 @@
 import { range, type Rng } from '../engine/rng'
 import type { Poly, Pt } from '../data/arenas'
 import * as dm from '../engine/dmath'
+import { CAVE_GEN } from '../data/procgen'
 
 /**
  * Mystery Dungeon floors (the cave, `cave.ts`): rooms on a grid joined by
@@ -27,6 +28,9 @@ export type DungeonFloor = {
   /** Glowing crystals (light and cover) and stalagmites (cover). */
   crystals: readonly Pt[]
   rocks: readonly Pt[]
+  /** Rooms that spring an ambush when first entered, and the prize lying in each (the generated floors, `generateFloorV2`). */
+  ambush: readonly number[]
+  prizes: readonly Pt[]
 }
 
 /** Grid, room sizes and corridors per floor, in px. */
@@ -177,7 +181,130 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
   const items = scatter(DUNGEON.items, others, 40, (r) => spotIn(rng, r, 18))
   const crystals = scatter(Math.ceil(rooms.length / 2), all, 50, (r) => cornerIn(rng, r))
   const rocks = scatter(rooms.length, others, 36, (r) => spotIn(rng, r, 26))
-  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks }
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush: [], prizes: [] }
+}
+
+/**
+ * A bigger, less regular floor (`CAVE_GEN`): rooms on a larger grid with a
+ * share of its cells left empty (never splitting the rest), a spanning tree
+ * plus a few extra corridors to choose routes from, the stairs in the room the
+ * most corridors away, and some rooms set aside as ambushes with a prize each.
+ * Pure: the same rng gives the same floor. Same shape as `generateFloor`, so
+ * the walkers' steering (`dungeonNav`) and the art work as they are.
+ */
+export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
+  const k = Math.min(index, CAVE_GEN.grids.length - 1)
+  const grid = CAVE_GEN.grids[k]!
+  const { w: CW, h: CH } = DUNGEON.cell
+  const { gap } = DUNGEON
+  const total = grid.cols * grid.rows
+  const cellAt = (c: number, r: number) => r * grid.cols + c
+  const around = (i: number) => {
+    const c = i % grid.cols
+    const r = Math.floor(i / grid.cols)
+    return [c > 0 ? cellAt(c - 1, r) : -1, c < grid.cols - 1 ? cellAt(c + 1, r) : -1, r > 0 ? cellAt(c, r - 1) : -1, r < grid.rows - 1 ? cellAt(c, r + 1) : -1].filter((n) => n >= 0)
+  }
+  // Leave some cells empty, keeping the rest in one piece.
+  const kept = Array<boolean>(total).fill(true)
+  const whole = () => {
+    const first = kept.indexOf(true)
+    const seen = new Set<number>([first])
+    const todo = [first]
+    for (let i = 0; i < todo.length; i++) for (const n of around(todo[i]!)) if (kept[n] && !seen.has(n)) (seen.add(n), todo.push(n))
+    return seen.size === kept.filter(Boolean).length
+  }
+  const order = Array.from({ length: total }, (_, i) => i)
+  for (let i = total - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[order[i], order[j]] = [order[j]!, order[i]!]
+  }
+  let toDrop = Math.floor(total * CAVE_GEN.drop[k]!)
+  for (const i of order) {
+    if (toDrop <= 0) break
+    kept[i] = false
+    if (whole()) toDrop--
+    else kept[i] = true
+  }
+  const rooms: Rect[] = []
+  const cellOf: number[] = []
+  const roomOf = Array<number>(total).fill(-1)
+  for (let cell = 0; cell < total; cell++) {
+    if (!kept[cell]) continue
+    const c = cell % grid.cols
+    const r = Math.floor(cell / grid.cols)
+    const ox = (c - (grid.cols - 1) / 2) * CW - CW / 2
+    const oy = (r - (grid.rows - 1) / 2) * CH - CH / 2
+    const w = dm.round(range(rng, DUNGEON.room.minW, CW - gap * 2))
+    const h = dm.round(range(rng, DUNGEON.room.minH, CH - gap * 2))
+    roomOf[cell] = rooms.length
+    cellOf.push(cell)
+    rooms.push({ x: dm.round(ox + gap + rng() * (CW - gap * 2 - w)), y: dm.round(oy + gap + rng() * (CH - gap * 2 - h)), w, h })
+  }
+  const neighbors = (room: number) => around(cellOf[room]!).filter((n) => kept[n]).map((n) => roomOf[n]!)
+  // A random spanning tree (depth-first), then a share of the other corridors for loops.
+  const links: Link[] = []
+  const linked = (a: number, b: number) => links.some((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a))
+  const join = (a: number, b: number) => {
+    const [lo, hi] = a < b ? [a, b] : [b, a]
+    links.push(corridor(rooms, lo, hi, Math.floor(cellOf[lo]! / grid.cols) === Math.floor(cellOf[hi]! / grid.cols)))
+  }
+  const seen = new Set<number>()
+  const stack = [Math.floor(rng() * rooms.length)]
+  seen.add(stack[0]!)
+  while (stack.length > 0) {
+    const cur = stack[stack.length - 1]!
+    const open = neighbors(cur).filter((n) => !seen.has(n))
+    if (open.length === 0) {
+      stack.pop()
+      continue
+    }
+    const next = open[Math.floor(rng() * open.length)]!
+    join(cur, next)
+    seen.add(next)
+    stack.push(next)
+  }
+  const extra = rooms.flatMap((_, i) => neighbors(i).filter((n) => n > i && !linked(i, n)).map((n) => [i, n] as const))
+  const loops = Math.min(extra.length, Math.max(1, dm.round(extra.length * CAVE_GEN.loops)))
+  for (let n = 0; n < loops; n++) {
+    const [a, b] = extra.splice(Math.floor(rng() * extra.length), 1)[0]!
+    join(a, b)
+  }
+
+  const startRoom = Math.floor(rng() * rooms.length)
+  const dist = roomDistances({ rooms, links }, [startRoom])
+  const start = center(rooms[startRoom]!)
+  const far = (i: number) => dist[i]! * 1e7 + far2(center(rooms[i]!), start)
+  const stairsRoom = rooms.reduce((best, _, i) => (far(i) > far(best) ? i : best), 0)
+  const stairs = spotIn(rng, rooms[stairsRoom]!, 24)
+
+  // Ambush rooms: not the start nor the stairs, the ones a step or more from the start first.
+  const spare = rooms.map((_, i) => i).filter((i) => i !== startRoom && i !== stairsRoom)
+  for (let i = spare.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[spare[i], spare[j]] = [spare[j]!, spare[i]!]
+  }
+  const distant = spare.filter((i) => dist[i]! >= 2)
+  const ambush = [...distant, ...spare.filter((i) => dist[i]! < 2)].slice(0, CAVE_GEN.ambush[k]!)
+  const prizes = ambush.map((i): Pt => spotIn(rng, rooms[i]!, 26))
+
+  const taken: Pt[] = [start, stairs, ...prizes]
+  const scatter = (count: number, pool: readonly number[], spacing: number, spot: (r: Rect) => Pt) => {
+    const out: Pt[] = []
+    for (let i = 0; i < count * 6 && out.length < count; i++) {
+      const p = spot(rooms[pool[Math.floor(rng() * pool.length)]!]!)
+      if (taken.some((t) => far2(t, p) < spacing * spacing)) continue
+      out.push(p)
+      taken.push(p)
+    }
+    return out
+  }
+  const all = rooms.map((_, i) => i)
+  const others = all.filter((i) => i !== startRoom)
+  const plain = others.filter((i) => !ambush.includes(i))
+  const items = scatter(CAVE_GEN.items[k]!, plain.length > 0 ? plain : others, 40, (r) => spotIn(rng, r, 18))
+  const crystals = scatter(Math.ceil(rooms.length / 2), all, 50, (r) => cornerIn(rng, r))
+  const rocks = scatter(rooms.length, others, 36, (r) => spotIn(rng, r, 26))
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush, prizes }
 }
 
 /** Index of the room holding (x, y), or -1. */

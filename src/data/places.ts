@@ -3,6 +3,7 @@ import type { BiomeId } from './biomes'
 import type { Drop } from './consumables'
 import type { EnemyId } from './enemies'
 import type { ThemeId } from './music'
+import { CAVE_GEN, PROCGEN } from './procgen'
 import type { Ellipse } from './terrain'
 
 /**
@@ -37,7 +38,7 @@ export type PlaceDef = {
 export const PLACES = {
   /** A Mystery Dungeon: dark floors of rooms and corridors, stairs down, a treasure at the bottom. */
   cave: {
-    time: 100,
+    time: PROCGEN.cave ? CAVE_GEN.floorTime[0] : 100,
     species: ['zubat', 'diglett', 'geodude', 'roggenrola', 'sableye', 'aron', 'graveler', 'golbat', 'dugtrio', 'golem', 'crobat', 'excadrill'],
     spawn: { rate: 0.9, max: 14 },
     biomes: { cave: 3, meadow: 1.5 },
@@ -88,7 +89,7 @@ export const PLACE = {
 /** The Mystery Dungeon: floors, light and the PMD wind that blows explorers out. */
 export const CAVE = {
   /** Floors with stairs; the one after them is the treasure chamber. */
-  floors: 2,
+  floors: PROCGEN.cave ? 3 : 2,
   /** Seconds the floor's title card holds the dungeon still ("Dark Cave B1F"). */
   card: 1.5,
   /** Radius of the light around the player; Fire types carry a flame, Electric types Flash. */
@@ -97,7 +98,7 @@ export const CAVE = {
   electricLight: 96,
   stairsRadius: 10,
   /** Seconds left when the wind warns ("Something's stirring…", "It's getting closer!", "It's right nearby!"). */
-  wind: [40, 20, 8],
+  wind: PROCGEN.cave ? CAVE_GEN.wind : ([40, 20, 8] as const),
   /** The treasure chamber's Monster House: this many wild Pokémon, plus one per two minutes played. */
   monsterHouse: 6,
   /** Standing this close to the chest for `chestTime` seconds opens it. */
