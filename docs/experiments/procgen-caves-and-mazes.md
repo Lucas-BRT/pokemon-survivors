@@ -135,6 +135,30 @@ Dois caminhos para a caverna orgânica; implementar os dois no laboratório e me
 - **Escopo de design:** quanto de jogo novo (chaves, desafios) vale a pena, e se o mantenedor quer isso ou só plantas mais variadas.
 - **Relógio da caverna:** manter 100 s ou dar tempo por andar?
 
+## 9b. Decisões tomadas (2026-11-01)
+
+- Plantas **mais variadas e maiores**, e **desafios novos** (não só o desenho).
+- O relógio da caverna passa a ser **por andar**.
+- Tudo **local, sem issue**: é experimento. Se um dia for para o mantenedor, vale o item 10.
+
+## 9c. Resultados até agora
+
+**Fase 0 e começo da Fase 1** (`src/game/procgen/maze.ts`, `maze.test.ts`, `lab.test.ts`). O laboratório roda com
+`VITE_LAB=1 npx vitest run src/game/procgen/lab.test.ts --reporter=verbose`.
+
+| Estilo | Células | Passos entrada→tesouro | Diâmetro | Alcance (passos/diâmetro) | Becos | Laços | Curvas | Becos fora do caminho |
+|---|---|---|---|---|---|---|---|---|
+| Atual (6 padrões 5×5, baú no centro) | 25 | 9,0 | 19,8 | **46,5%** | 4,8 | 0 | 5,5 | 3,8 |
+| Novo 7×7 corredores (newest 0,9) | 49 | 32,5 | 32,7 | 99,4% | 7,3 | 0 | 19,8 | 6,3 |
+| Novo 9×9 misto (newest 0,7) | 81 | 40,3 | 40,6 | 99,3% | 15,5 | 0 | 24,1 | 14,5 |
+| Novo 9×9 ramificado (newest 0,3) | 81 | 28,5 | 28,6 | 99,9% | 21,8 | 0 | 15,5 | 20,8 |
+| Novo 9×9 misto + braid 0,3 | 81 | 32,3 | 32,5 | 99,3% | 9,1 | 4,5 | 18,7 | 8,3 |
+| Novo 11×11 misto + braid 0,2 | 121 | 42,2 | 42,5 | 99,4% | 16,5 | 4,5 | 24,7 | 15,6 |
+
+Leitura: escolher a entrada e o tesouro pelo diâmetro leva o alcance de ~46% para ~99%, e o caminho certo de 9 para 28 a 42 passos (3 a 5 vezes mais longo), com 3 a 5 vezes mais curvas. O `braid` troca becos por laços (escolha de rota). A 32 px por célula, um 9×9 misto são ~1300 px de caminho, perto de 19 s de caminhada de ida com a velocidade base do jogador (68 px/s); é o tempo que um relógio e as emboscadas vão ter de levar em conta.
+
+Pendente da Fase 1: colocar o gerador dentro do jogo (semente por monumento, arte por autotile, minimapa) e os desafios (emboscadas, armadilhas, relógio).
+
 ## 10. Como isso viraria PRs (se o mantenedor topar)
 
 1. Issue "Cavernas e labirintos gerados" (texto próprio, com as tabelas da seção 1).
