@@ -165,18 +165,25 @@ Pendente da Fase 1: colocar o gerador dentro do jogo (semente por monumento, art
 
 **Caverna** (commit `bc29296e`, `PROCGEN.cave`): `generateFloorV2`, a planta em grade maior com células vazias, laços, salas de emboscada com prêmio e relógio por andar. Medido em 200 sementes:
 
-| Andar | Salas | Laços | Saltos até a escada | Área (mil px²) | Largura × altura (px) | Emboscadas | Itens e prêmios |
-|---|---|---|---|---|---|---|---|
-| Atual B1F (3×2) | 6,0 | 0,0 | 3,8 | 73 | 517 × 275 | 0 | 2 |
-| Atual B2F (3×3) | 9,0 | 1,0 | 4,5 | 110 | 524 × 435 | 0 | 2 |
-| Gerado B1F (4×3) | 11,0 | 1,3 | 5,5 | 134 | 712 × 437 | 1 | 3 |
-| Gerado B2F (4×4) | 13,0 | 1,2 | 6,3 | 158 | 714 × 596 | 2 | 5 |
-| Gerado B3F (5×4) | 15,0 | 1,2 | 7,2 | 183 | 901 × 597 | 2 | 5 |
+| Andar | Salas | Laços | Saltos até a escada | Área (mil px²) | Largura × altura (px) | Emboscadas | Itens e prêmios | Salas grandes | Maior sala (células) |
+|---|---|---|---|---|---|---|---|---|---|
+| Atual B1F (3×2) | 6,0 | 0,0 | 3,8 | 73 | 517 × 275 | 0 | 2 | 0 | 1 |
+| Atual B2F (3×3) | 9,0 | 1,0 | 4,5 | 110 | 524 × 435 | 0 | 2 | 0 | 1 |
+| Gerado B1F (4×3) | 8,7 | 0,9 | 4,4 | 153 | 711 × 437 | 1,0 | 3,3 | 1,7 | 2,6 |
+| Gerado B2F (4×4) | 9,1 | 0,9 | 4,6 | 190 | 711 × 593 | 1,7 | 5,6 | 2,1 | 3,8 |
+| Gerado B3F (5×4) | 9,4 | 0,7 | 4,6 | 227 | 892 × 593 | 1,9 | 6,5 | 2,3 | 5,2 |
+
+As salas ficaram menos numerosas e bem maiores (a área mais que dobra: de 110 para 227 mil px² no B3 contra o B2 atual).
 
 - **Três andares com escada** mais a câmara do baú (antes eram dois).
-- **Um só caminho até a escada** (decisão de 2026-11-01): `CAVE_GEN.loops = 0` deixa cada andar uma árvore de salas, com um único caminho entre quaisquer duas e, portanto, até a escada. Os ramos laterais são becos que guardam as salas de emboscada e os prêmios. A coluna "Laços" da tabela abaixo é de antes dessa decisão (≈ 1,2 por andar); agora é 0. Subir `loops` traz as rotas alternativas de volta.
+- **Escada com uma só entrada** (decisão de 2026-11-01): os laços voltaram (`CAVE_GEN.loops = 0,3`), mas a sala da escada fica sempre na ponta da árvore, com um único corredor, e nenhum laço a toca. Há várias rotas pelo andar, e uma só porta para a saída.
 - **Relógio por andar** (`CAVE_GEN.floorTime` 75, 90 e 105 s; câmara 60 s), com o vento recomeçando em cada andar (30, 15 e 6 s). Confirmado na tela: "B2F · wind 01:30".
-- **Emboscada:** o primeiro jogador que pisa numa sala marcada solta uma matilha (4 + 2 por andar) ao redor da sala e deixa um prêmio (₽ e um item) a quem aguentar. O spawn escuro também cresce 20% por andar.
+- **Salas de tamanhos diferentes** (`CAVE_GEN.big`, `shapes`, `bigShare`): além da sala regular (1 célula), há 2×1, 1×2, 2×2, 3×2, 2×3 e 3×3, mais variadas nos andares fundos. As grandes ocupam no máximo 45% da grade. Os corredores saem pela linha da célula por onde a sala se liga.
+- **Emboscada só nas salas grandes** (as maiores primeiro, nunca a entrada nem a escada): o primeiro jogador que pisa solta uma matilha **temática por andar e proporcional ao tamanho da sala**, e deixa prêmios (₽ e item) em quantidade crescente com a sala (1, 2 ou 3 pilhas). O spawn escuro também cresce 20% por andar. Matilhas (`CAVE_GEN.packs`, limite de 22):
+  - **B1F:** zubat, diglett e geodude, 6 + 3 por célula extra (muitos e fracos).
+  - **B2F:** geodude, roggenrola e aron, 5 + 2 por célula extra, com um **Graveler Alfa** de líder em salas de 4 células ou mais.
+  - **B3F:** geodude, graveler e roggenrola, 5 + 2 por célula extra, com um **Onix** de líder (1100 HP, sem o sistema de luta de chefe) em salas de 6 células ou mais.
+  - Verificado por simulação: uma sala de 6 células no B3 solta 15 Pokémon mais o Onix, e a partida segue sem erro.
 - O evento da emboscada reaproveita o `monsterHouse`, então o aviso na tela ainda é o texto do Monster House.
 
 **Versão das regras:** o experimento inteiro usa um único salto, `RULES_VERSION` 44 (o simulador congelado `server/sims/rules-43.mjs` foi gerado a partir do commit `cb8e4c9c`, o último sem mudança de regra). Os digests do `rulesGuard` e o *golden run* do Honedge foram refixados, e o teste de `snapshot` ganhou a tolerância `by` (assinatura de hazard, constante de módulo só lida) e perdeu o `tunnel` da lista de momentos obrigatórios, porque a rota do bot mudou e há um caso próprio do túnel.
@@ -185,7 +192,7 @@ Pendente da Fase 1: colocar o gerador dentro do jogo (semente por monumento, art
 1. Desafios no labirinto (emboscadas em becos, armadilhas, relógio): hoje ele só ficou maior e mais longo.
 2. Texto e aviso próprios da emboscada nos cinco idiomas.
 3. Cavernas orgânicas (automato celular) e salas chanfradas, para quebrar o aspecto retangular das salas.
-4. Chaves e portas, um desafio final além do Monster House, e mais laços (hoje ≈ 1,2 por andar).
+4. Chaves e portas, e um desafio final além do Monster House.
 5. Um labirinto único por monumento (hoje há 12 padrões), maiores que um terreno (precisaria de um monumento de 2×2 células) e arte por autotile.
 6. Ajuste fino de tempo, de dificuldade e de recompensa, que só se vê jogando.
 

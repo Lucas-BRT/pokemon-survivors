@@ -32,21 +32,41 @@ describe.skipIf(!PROCGEN.cave)('the generated cave at play', () => {
     expect(inside.left).toBe(CAVE_GEN.chamberTime)
   })
 
-  it('springs the ambush pack the first time someone steps into its room, and only once', () => {
+  it('springs the pack of the floor, as many as the room is big, the first time someone steps into the room, and only once', () => {
     const { g, inside } = inCave()
     const plan = inside.state.plan!
     const room = plan.ambush[0]!
     const rect = plan.rooms[room]!
+    const pack = CAVE_GEN.packs[0]!
     const before = g.enemies.length
-    Object.assign(g.player, { x: inside.x + rect.x + rect.w / 2, y: inside.y + rect.y + rect.h / 2 })
+    Object.assign(g.player, { x: inside.x + rect.x + 24, y: inside.y + rect.y + 24 })
     updateCave(g, inside, TICK)
     expect(inside.state.sprung).toEqual([room])
-    expect(g.enemies.length - before).toBe(CAVE_GEN.pack.base + CAVE_GEN.pack.perFloor * inside.state.floor)
+    expect(g.enemies.length - before).toBe(Math.min(CAVE_GEN.packMax, pack.base + pack.perCell * (plan.sizes[room]! - 1)))
+    expect(g.enemies.slice(before).every((e) => pack.mob.includes(e.kind))).toBe(true)
     const after = g.enemies.length
     updateCave(g, inside, TICK)
     expect(inside.state.sprung).toEqual([room])
     // Only the dark's slow spawns, never a second pack.
-    expect(g.enemies.length - after).toBeLessThan(CAVE_GEN.pack.base)
+    expect(g.enemies.length - after).toBeLessThan(pack.base)
+  })
+
+  it('brings the deeper floors’ leader with the pack, in a room big enough for it', () => {
+    const { g, inside } = inCave(11)
+    descendCave(g, inside)
+    descendCave(g, inside)
+    const plan = inside.state.plan!
+    const pack = CAVE_GEN.packs[2]!
+    const lead = pack.leader!
+    for (const room of plan.ambush) {
+      const rect = plan.rooms[room]!
+      const before = g.enemies.length
+      Object.assign(g.player, { x: inside.x + rect.x + 24, y: inside.y + rect.y + 24 })
+      updateCave(g, inside, TICK)
+      const born = g.enemies.slice(before)
+      expect(born.some((e) => e.kind === lead.kind)).toBe(plan.sizes[room]! >= lead.minCells)
+      expect(born.filter((e) => e.kind !== lead.kind).every((e) => pack.mob.includes(e.kind))).toBe(true)
+    }
   })
 
   it('lays a prize in each ambush room: ₽ and an item', () => {

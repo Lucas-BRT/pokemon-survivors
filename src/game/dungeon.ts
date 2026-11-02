@@ -28,9 +28,11 @@ export type DungeonFloor = {
   /** Glowing crystals (light and cover) and stalagmites (cover). */
   crystals: readonly Pt[]
   rocks: readonly Pt[]
-  /** Rooms that spring an ambush when first entered, and the prize lying in each (the generated floors, `generateFloorV2`). */
+  /** Rooms that spring an ambush when first entered, and the prizes lying in them, more in the bigger ones (the generated floors, `generateFloorV2`). */
   ambush: readonly number[]
   prizes: readonly Pt[]
+  /** How many grid cells each room takes: 1 for the regular size, 2 for a 2×1, 4 for a 2×2, 9 for a 3×3… */
+  sizes: readonly number[]
 }
 
 /** Grid, room sizes and corridors per floor, in px. */
@@ -86,6 +88,27 @@ const corridor = (rooms: readonly Rect[], a: number, b: number, across: boolean)
     : (() => {
         const my = dm.round((ra.y + ra.h + rb.y) / 2)
         return [[ax, ay], [ax, my], [bx, my], [bx, by]]
+      })()
+  return { a, b, path, rects: path.slice(1).map((p, i) => stretch(path[i]!, p, DUNGEON.corridor)) }
+}
+
+/**
+ * A Z-shaped corridor between two rooms of the generated floors, `a` the left
+ * (or upper) one, from a point inside each (`pa`, `pb`): straight out of the
+ * room, the bend in the gap between them. For rooms of the regular size the
+ * points are their middles, as in `corridor`.
+ */
+const corridorBetween = (rooms: readonly Rect[], a: number, b: number, pa: Pt, pb: Pt, across: boolean): Link => {
+  const ra = rooms[a]!
+  const rb = rooms[b]!
+  const path: Pt[] = across
+    ? (() => {
+        const mx = dm.round((ra.x + ra.w + rb.x) / 2)
+        return [pa, [mx, pa[1]], [mx, pb[1]], pb]
+      })()
+    : (() => {
+        const my = dm.round((ra.y + ra.h + rb.y) / 2)
+        return [pa, [pa[0], my], [pb[0], my], pb]
       })()
   return { a, b, path, rects: path.slice(1).map((p, i) => stretch(path[i]!, p, DUNGEON.corridor)) }
 }
@@ -181,17 +204,18 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
   const items = scatter(DUNGEON.items, others, 40, (r) => spotIn(rng, r, 18))
   const crystals = scatter(Math.ceil(rooms.length / 2), all, 50, (r) => cornerIn(rng, r))
   const rocks = scatter(rooms.length, others, 36, (r) => spotIn(rng, r, 26))
-  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush: [], prizes: [] }
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush: [], prizes: [], sizes: rooms.map(() => 1) }
 }
 
 /**
- * A bigger, less regular floor (`CAVE_GEN`): rooms on a larger grid with a
- * share of its cells left empty (never splitting the rest), a spanning tree
- * (one way between any two rooms, so one way to the stairs; `CAVE_GEN.loops`
- * can add extra corridors back), the stairs in the room the
- * most corridors away, and some rooms set aside as ambushes with a prize each.
- * Pure: the same rng gives the same floor. Same shape as `generateFloor`, so
- * the walkers' steering (`dungeonNav`) and the art work as they are.
+ * A bigger, less regular floor (`CAVE_GEN`): rooms of different sizes on a
+ * grid (a regular cell, or 2×1, 2×2, 3×3… of them) with a share of the small
+ * ones left out (never splitting the rest), a spanning tree plus a share of
+ * the other corridors as loops, and the stairs in the farthest small room at
+ * the end of a single corridor: no loop ever reaches it, so there is one way
+ * in. Some of the big rooms are set aside as ambushes with prizes. Pure: the
+ * same rng gives the same floor. Same shape as `generateFloor`, so the
+ * walkers' steering (`dungeonNav`) and the art work as they are.
  */
 export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
   const k = Math.min(index, CAVE_GEN.grids.length - 1)
@@ -199,62 +223,125 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
   const { w: CW, h: CH } = DUNGEON.cell
   const { gap } = DUNGEON
   const total = grid.cols * grid.rows
-  const cellAt = (c: number, r: number) => r * grid.cols + c
-  const around = (i: number) => {
-    const c = i % grid.cols
-    const r = Math.floor(i / grid.cols)
-    return [c > 0 ? cellAt(c - 1, r) : -1, c < grid.cols - 1 ? cellAt(c + 1, r) : -1, r > 0 ? cellAt(c, r - 1) : -1, r < grid.rows - 1 ? cellAt(c, r + 1) : -1].filter((n) => n >= 0)
+
+  // Blocks of cells: the big rooms first, then a regular cell for every cell left.
+  type Block = { c: number; r: number; w: number; h: number }
+  const blocks: Block[] = []
+  const owner = Array<number>(total).fill(-1)
+  const cellsOf = (b: Block) => Array.from({ length: b.w * b.h }, (_, i) => (b.r + Math.floor(i / b.w)) * grid.cols + b.c + (i % b.w))
+  const fits = (b: Block) => b.c >= 0 && b.r >= 0 && b.c + b.w <= grid.cols && b.r + b.h <= grid.rows && cellsOf(b).every((cell) => owner[cell]! < 0)
+  const claim = (b: Block) => {
+    blocks.push(b)
+    for (const cell of cellsOf(b)) owner[cell] = blocks.length - 1
   }
-  // Leave some cells empty, keeping the rest in one piece.
-  const kept = Array<boolean>(total).fill(true)
+  const shapes = CAVE_GEN.shapes[k]!
+  const wanted = CAVE_GEN.big[k]!
+  for (let tries = 0, made = 0, used = 0; tries < wanted * 12 && made < wanted; tries++) {
+    const [w, h] = shapes[Math.floor(rng() * shapes.length)]!
+    const b = { c: Math.floor(rng() * grid.cols), r: Math.floor(rng() * grid.rows), w, h }
+    if (!fits(b) || used + w * h > total * CAVE_GEN.bigShare) continue
+    claim(b)
+    made++
+    used += w * h
+  }
+  for (let cell = 0; cell < total; cell++) if (owner[cell]! < 0) claim({ c: cell % grid.cols, r: Math.floor(cell / grid.cols), w: 1, h: 1 })
+
+  // Blocks touching each other across an edge of their cells.
+  const touching = (i: number) => {
+    const out = new Set<number>()
+    for (const cell of cellsOf(blocks[i]!)) {
+      const c = cell % grid.cols
+      const r = Math.floor(cell / grid.cols)
+      for (const [dc, dr] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+        if (c + dc < 0 || r + dr < 0 || c + dc >= grid.cols || r + dr >= grid.rows) continue
+        const o = owner[(r + dr) * grid.cols + c + dc]!
+        if (o >= 0 && o !== i) out.add(o)
+      }
+    }
+    return [...out]
+  }
+  // Leave some of the small blocks out, keeping the rest in one piece.
+  const alive = Array<boolean>(blocks.length).fill(true)
   const whole = () => {
-    const first = kept.indexOf(true)
+    const first = alive.indexOf(true)
     const seen = new Set<number>([first])
     const todo = [first]
-    for (let i = 0; i < todo.length; i++) for (const n of around(todo[i]!)) if (kept[n] && !seen.has(n)) (seen.add(n), todo.push(n))
-    return seen.size === kept.filter(Boolean).length
+    for (let i = 0; i < todo.length; i++) for (const n of touching(todo[i]!)) if (alive[n] && !seen.has(n)) (seen.add(n), todo.push(n))
+    return seen.size === alive.filter(Boolean).length
   }
-  const order = Array.from({ length: total }, (_, i) => i)
-  for (let i = total - 1; i > 0; i--) {
+  const smalls = blocks.map((_, i) => i).filter((i) => blocks[i]!.w * blocks[i]!.h === 1)
+  for (let i = smalls.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
-    ;[order[i], order[j]] = [order[j]!, order[i]!]
+    ;[smalls[i], smalls[j]] = [smalls[j]!, smalls[i]!]
   }
   let toDrop = Math.floor(total * CAVE_GEN.drop[k]!)
-  for (const i of order) {
+  for (const i of smalls) {
     if (toDrop <= 0) break
-    kept[i] = false
+    alive[i] = false
     if (whole()) toDrop--
-    else kept[i] = true
+    else alive[i] = true
   }
+
+  // Rooms: one per block left, in a rectangle somewhere inside its cells (a big room fills most of them).
   const rooms: Rect[] = []
-  const cellOf: number[] = []
-  const roomOf = Array<number>(total).fill(-1)
-  for (let cell = 0; cell < total; cell++) {
-    if (!kept[cell]) continue
-    const c = cell % grid.cols
-    const r = Math.floor(cell / grid.cols)
-    const ox = (c - (grid.cols - 1) / 2) * CW - CW / 2
-    const oy = (r - (grid.rows - 1) / 2) * CH - CH / 2
-    const w = dm.round(range(rng, DUNGEON.room.minW, CW - gap * 2))
-    const h = dm.round(range(rng, DUNGEON.room.minH, CH - gap * 2))
-    roomOf[cell] = rooms.length
-    cellOf.push(cell)
-    rooms.push({ x: dm.round(ox + gap + rng() * (CW - gap * 2 - w)), y: dm.round(oy + gap + rng() * (CH - gap * 2 - h)), w, h })
-  }
-  const neighbors = (room: number) => around(cellOf[room]!).filter((n) => kept[n]).map((n) => roomOf[n]!)
-  // A random spanning tree (depth-first), then a share of the other corridors for loops.
+  const sizes: number[] = []
+  const blockOf: number[] = []
+  const roomOfBlock = Array<number>(blocks.length).fill(-1)
+  blocks.forEach((b, i) => {
+    if (!alive[i]) return
+    const ox = (b.c - (grid.cols - 1) / 2) * CW - CW / 2
+    const oy = (b.r - (grid.rows - 1) / 2) * CH - CH / 2
+    const maxW = b.w * CW - gap * 2
+    const maxH = b.h * CH - gap * 2
+    // A regular cell's room keeps its usual size range; a big room is at least 70% of its cells' extent, and wider than a regular room on its thin side too.
+    const big = b.w * b.h > 1
+    const w = dm.round(range(rng, b.w > 1 ? maxW * 0.7 : big ? DUNGEON.room.minW * 1.4 : DUNGEON.room.minW, maxW))
+    const h = dm.round(range(rng, b.h > 1 ? maxH * 0.7 : big ? DUNGEON.room.minH * 1.4 : DUNGEON.room.minH, maxH))
+    roomOfBlock[i] = rooms.length
+    blockOf.push(i)
+    sizes.push(b.w * b.h)
+    rooms.push({ x: dm.round(ox + gap + rng() * (maxW - w)), y: dm.round(oy + gap + rng() * (maxH - h)), w, h })
+  })
+  const nbrs = rooms.map((_, room) => touching(blockOf[room]!).filter((n) => alive[n]).map((n) => roomOfBlock[n]!))
+
+  // A corridor between touching rooms through one pair of their touching cells, out of the room to the left (or above) first.
   const links: Link[] = []
   const linked = (a: number, b: number) => links.some((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a))
   const join = (a: number, b: number) => {
-    const [lo, hi] = a < b ? [a, b] : [b, a]
-    links.push(corridor(rooms, lo, hi, Math.floor(cellOf[lo]! / grid.cols) === Math.floor(cellOf[hi]! / grid.cols)))
+    const pairs: [number, number][] = []
+    for (const ca of cellsOf(blocks[blockOf[a]!]!)) {
+      const c = ca % grid.cols
+      const r = Math.floor(ca / grid.cols)
+      for (const [dc, dr] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+        if (c + dc < 0 || r + dr < 0 || c + dc >= grid.cols || r + dr >= grid.rows) continue
+        const cb = (r + dr) * grid.cols + c + dc
+        if (owner[cb] === blockOf[b]) pairs.push([ca, cb])
+      }
+    }
+    const [ca, cb] = pairs[Math.floor(rng() * pairs.length)]!
+    const across = Math.floor(ca / grid.cols) === Math.floor(cb / grid.cols)
+    const aFirst = across ? ca % grid.cols < cb % grid.cols : Math.floor(ca / grid.cols) < Math.floor(cb / grid.cols)
+    const [first, second, cf, cs] = aFirst ? [a, b, ca, cb] : [b, a, cb, ca]
+    links.push(corridorBetween(rooms, first, second, portOf(first, cf, across), portOf(second, cs, across), across))
   }
-  const seen = new Set<number>()
-  const stack = [Math.floor(rng() * rooms.length)]
-  seen.add(stack[0]!)
+  // Where a corridor leaves a room: its middle for a regular room, the line of the cell it leaves by for a bigger one.
+  const portOf = (room: number, cell: number, across: boolean): Pt => {
+    const r = rooms[room]!
+    const [cx, cy] = center(r)
+    if (sizes[room] === 1) return [cx, cy]
+    const px = dm.round((cell % grid.cols - (grid.cols - 1) / 2) * CW)
+    const py = dm.round((Math.floor(cell / grid.cols) - (grid.rows - 1) / 2) * CH)
+    return across ? [cx, Math.max(r.y + 20, Math.min(r.y + r.h - 20, py))] : [Math.max(r.x + 20, Math.min(r.x + r.w - 20, px)), cy]
+  }
+
+  // A random spanning tree (depth-first) from a regular room.
+  const regular = rooms.map((_, i) => i).filter((i) => sizes[i] === 1)
+  const root = (regular.length > 0 ? regular : rooms.map((_, i) => i))[Math.floor(rng() * Math.max(1, regular.length || rooms.length))]!
+  const seen = new Set<number>([root])
+  const stack = [root]
   while (stack.length > 0) {
     const cur = stack[stack.length - 1]!
-    const open = neighbors(cur).filter((n) => !seen.has(n))
+    const open = nbrs[cur]!.filter((n) => !seen.has(n))
     if (open.length === 0) {
       stack.pop()
       continue
@@ -264,29 +351,36 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
     seen.add(next)
     stack.push(next)
   }
-  const extra = rooms.flatMap((_, i) => neighbors(i).filter((n) => n > i && !linked(i, n)).map((n) => [i, n] as const))
+
+  // The start in a regular room, the stairs at the far end of the tree: a leaf, kept out of every loop.
+  const startRoom = (regular.length > 0 ? regular : rooms.map((_, i) => i))[Math.floor(rng() * Math.max(1, regular.length || rooms.length))]!
+  const start = center(rooms[startRoom]!)
+  const treeDist = roomDistances({ rooms, links }, [startRoom])
+  const degree = (room: number) => links.filter((l) => l.a === room || l.b === room).length
+  const far = (i: number) => treeDist[i]! * 1e7 + far2(center(rooms[i]!), start)
+  const leaves = rooms.map((_, i) => i).filter((i) => i !== startRoom && degree(i) === 1)
+  const smallLeaves = leaves.filter((i) => sizes[i] === 1)
+  const stairsRoom = (smallLeaves.length > 0 ? smallLeaves : leaves).reduce((best, i) => (far(i) > far(best) ? i : best))
+  const stairs = spotIn(rng, rooms[stairsRoom]!, 24)
+
+  // Loops: other corridors between rooms that touch, never into the stairs room.
+  const extra = rooms.flatMap((_, i) => nbrs[i]!.filter((n) => n > i && !linked(i, n) && i !== stairsRoom && n !== stairsRoom).map((n) => [i, n] as const))
   const loops = Math.min(extra.length, dm.round(extra.length * CAVE_GEN.loops))
   for (let n = 0; n < loops; n++) {
     const [a, b] = extra.splice(Math.floor(rng() * extra.length), 1)[0]!
     join(a, b)
   }
-
-  const startRoom = Math.floor(rng() * rooms.length)
   const dist = roomDistances({ rooms, links }, [startRoom])
-  const start = center(rooms[startRoom]!)
-  const far = (i: number) => dist[i]! * 1e7 + far2(center(rooms[i]!), start)
-  const stairsRoom = rooms.reduce((best, _, i) => (far(i) > far(best) ? i : best), 0)
-  const stairs = spotIn(rng, rooms[stairsRoom]!, 24)
 
-  // Ambush rooms: not the start nor the stairs, the ones a step or more from the start first.
-  const spare = rooms.map((_, i) => i).filter((i) => i !== startRoom && i !== stairsRoom)
-  for (let i = spare.length - 1; i > 0; i--) {
+  // Ambush rooms: big ones only (the biggest first), never the start nor the stairs.
+  const bigs = rooms.map((_, i) => i).filter((i) => sizes[i]! > 1 && i !== startRoom && i !== stairsRoom)
+  for (let i = bigs.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
-    ;[spare[i], spare[j]] = [spare[j]!, spare[i]!]
+    ;[bigs[i], bigs[j]] = [bigs[j]!, bigs[i]!]
   }
-  const distant = spare.filter((i) => dist[i]! >= 2)
-  const ambush = [...distant, ...spare.filter((i) => dist[i]! < 2)].slice(0, CAVE_GEN.ambush[k]!)
-  const prizes = ambush.map((i): Pt => spotIn(rng, rooms[i]!, 26))
+  const ambush = bigs.sort((a, b) => sizes[b]! - sizes[a]!).slice(0, CAVE_GEN.ambush[k]!)
+  // A prize for whoever clears it, more in a bigger room.
+  const prizes = ambush.flatMap((i) => Array.from({ length: 1 + (sizes[i]! >= 4 ? 1 : 0) + (sizes[i]! >= 6 ? 1 : 0) }, (): Pt => spotIn(rng, rooms[i]!, 26)))
 
   const taken: Pt[] = [start, stairs, ...prizes]
   const scatter = (count: number, pool: readonly number[], spacing: number, spot: (r: Rect) => Pt) => {
@@ -304,8 +398,10 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
   const plain = others.filter((i) => !ambush.includes(i))
   const items = scatter(CAVE_GEN.items[k]!, plain.length > 0 ? plain : others, 40, (r) => spotIn(rng, r, 18))
   const crystals = scatter(Math.ceil(rooms.length / 2), all, 50, (r) => cornerIn(rng, r))
-  const rocks = scatter(rooms.length, others, 36, (r) => spotIn(rng, r, 26))
-  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush, prizes }
+  const cover = rooms.length + sizes.reduce((a, s) => a + (s - 1), 0)
+  const rocks = scatter(cover, others, 36, (r) => spotIn(rng, r, 26))
+  void dist
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush, prizes, sizes }
 }
 
 /** Index of the room holding (x, y), or -1. */

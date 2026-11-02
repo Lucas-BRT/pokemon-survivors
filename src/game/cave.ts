@@ -4,6 +4,7 @@ import type { Circle, FloorPlan, Pt } from '../data/arenas'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import { CAVE, PLACE_FEET, PLACE_LOOT } from '../data/places'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
+import { spawnAlpha } from './alphas'
 import { dropItem } from './consumables'
 import { floorShapes, generateFloor, generateFloorV2, roomAt, type DungeonFloor, type Rect } from './dungeon'
 import { burst, shakeScreen } from './effects'
@@ -191,16 +192,35 @@ const springHouse = (g: Game, inside: CaveInside) => {
   notifyPlace(g, 'cave', { kind: 'monsterHouse' })
 }
 
-/** An ambush room's pack: wild Pokémon out of the dark all around the room at once. */
-const springAmbush = (g: Game, inside: CaveInside, room: Rect) => {
-  const count = CAVE_GEN.pack.base + CAVE_GEN.pack.perFloor * inside.state.floor
+/**
+ * An ambush room's pack: wild Pokémon out of the dark all over the room at
+ * once, themed by depth and as many as the room is big (`CAVE_GEN.packs`),
+ * with the floor's leader in a big enough room: an Alpha, or a tough Pokémon
+ * like Onix. They appear clear of whoever stepped in (`by`).
+ */
+const springAmbush = (g: Game, inside: CaveInside, room: Rect, cells: number, by: { x: number; y: number }) => {
+  const pack = CAVE_GEN.packs[Math.min(inside.state.floor, CAVE_GEN.packs.length - 1)]!
+  const count = Math.min(CAVE_GEN.packMax, pack.base + pack.perCell * (cells - 1))
+  const spot = () => {
+    let x = 0
+    let y = 0
+    for (let i = 0; i < 8; i++) {
+      x = inside.x + range(g.rng, room.x + 16, room.x + room.w - 16)
+      y = inside.y + range(g.rng, room.y + 16, room.y + room.h - 16)
+      if (dm.sq(x - by.x) + dm.sq(y - by.y) > 70 * 70) break
+    }
+    return { x, y }
+  }
+  for (let i = 0; i < count; i++) {
+    const at = spot()
+    spawnEnemy(g, pack.mob[Math.floor(g.rng() * pack.mob.length)]!, at.x, at.y)
+  }
   const cx = inside.x + room.x + room.w / 2
   const cy = inside.y + room.y + room.h / 2
-  const offset = range(g.rng, 0, TAU)
-  const pool = placePool('cave', g.time)
-  for (let i = 0; i < count; i++) {
-    const a = offset + (i / count) * TAU
-    spawnEnemy(g, weightedPick(g.rng, pool), cx + dm.cos(a) * room.w * 0.4, cy + dm.sin(a) * room.h * 0.4)
+  const lead = pack.leader
+  if (lead && cells >= lead.minCells) {
+    if (lead.alpha) spawnAlpha(g, lead.kind, cx, cy)
+    else spawnEnemy(g, lead.kind, cx, cy)
   }
   shakeScreen(g, 4, { x: cx, y: cy })
   notifyPlace(g, 'cave', { kind: 'monsterHouse' })
@@ -250,7 +270,7 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
       const room = roomAt(plan, p.x - inside.x, p.y - inside.y)
       if (room < 0 || !s.ambush.includes(room) || s.sprung.includes(room)) continue
       s.sprung.push(room)
-      springAmbush(g, inside, plan.rooms[room]!)
+      springAmbush(g, inside, plan.rooms[room]!, plan.sizes[room]!, p)
     }
   }
   // Any player at the stairs takes the team down; any player at the chest opens it.

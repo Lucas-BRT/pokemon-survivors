@@ -77,61 +77,93 @@ describe('dungeonNav', () => {
 
 describe('generateFloorV2', () => {
   const floors2 = (index: number) => Array.from({ length: 60 }, (_, seed) => generateFloorV2(createRng(seed + 1), index))
+  const degree = (f: DungeonFloor, room: number) => f.links.filter((l) => l.a === room || l.b === room).length
 
-  it('joins every room (some grid cells left empty), with loops to choose routes from, the stairs the most corridors away', () => {
+  it('joins every room, leaving some cells empty, with the stairs the farthest of the small rooms at the end of the tree', () => {
     for (const index of [0, 1, 2]) {
       const grid = CAVE_GEN.grids[index]!
+      const cells = grid.cols * grid.rows
       for (const f of floors2(index)) {
         const dist = roomDistances(f, [f.startRoom])
         expect(dist.every((d) => Number.isFinite(d))).toBe(true)
-        expect(dist[f.stairsRoom]).toBe(Math.max(...dist))
-        expect(f.rooms.length).toBeLessThan(grid.cols * grid.rows)
-        expect(f.rooms.length).toBeGreaterThanOrEqual(Math.floor(grid.cols * grid.rows * (1 - CAVE_GEN.drop[index]!)))
-        // A tree: one corridor fewer than rooms, so one way between any two rooms (loops only if `CAVE_GEN.loops` asks).
-        if (CAVE_GEN.loops === 0) expect(f.links.length).toBe(f.rooms.length - 1)
-        else expect(f.links.length).toBeGreaterThanOrEqual(f.rooms.length - 1)
+        const taken = f.sizes.reduce((a, n) => a + n, 0)
+        expect(taken).toBeLessThan(cells)
+        expect(taken).toBeGreaterThanOrEqual(cells - Math.floor(cells * CAVE_GEN.drop[index]!))
+        expect(f.links.length).toBeGreaterThanOrEqual(f.rooms.length - 1)
         expect(roomAt(f, ...f.stairs)).toBe(f.stairsRoom)
         expect(roomAt(f, ...f.start)).toBe(f.startRoom)
+        expect(f.sizes[f.startRoom]).toBe(1)
       }
     }
   })
 
-  it.skipIf(CAVE_GEN.loops !== 0)('has one way to the stairs: every room but the start is reached through one corridor from the room before it, and no room is joined twice', () => {
+  it('hangs the stairs room off a single corridor, so no loop reaches it, while loops exist elsewhere', () => {
+    let withLoops = 0
     for (const index of [0, 1, 2]) {
       for (const f of floors2(index)) {
-        const dist = roomDistances(f, [f.startRoom])
-        // Each room has exactly one neighbor one step nearer to the start (a loop would give a second way in).
-        f.rooms.forEach((_, room) => {
-          if (room === f.startRoom) return
-          const nearer = f.links.filter((l) => (l.a === room && dist[l.b] === dist[room]! - 1) || (l.b === room && dist[l.a] === dist[room]! - 1))
-          expect(nearer).toHaveLength(1)
-          // And none of its other corridors leads to a room as near as it.
-          for (const l of f.links.filter((l) => l.a === room || l.b === room)) expect(dist[l.a === room ? l.b : l.a]).not.toBe(dist[room])
+        expect(degree(f, f.stairsRoom)).toBe(1)
+        // Taking that corridor away leaves the rest joined: nothing else depended on the stairs room.
+        const rest = f.links.filter((l) => l.a !== f.stairsRoom && l.b !== f.stairsRoom)
+        expect(rest.length).toBe(f.links.length - 1)
+        if (f.links.length > f.rooms.length - 1) withLoops++
+      }
+    }
+    expect(withLoops).toBeGreaterThan(60)
+  })
+
+  it('makes rooms of different sizes: the regular one and bigger ones of several cells', () => {
+    for (const index of [0, 1, 2]) {
+      const fs = floors2(index)
+      for (const f of fs) {
+        expect(f.sizes).toHaveLength(f.rooms.length)
+        expect(Math.max(...f.sizes)).toBeGreaterThan(1)
+        // A room of several cells is bigger than a regular one's largest.
+        f.rooms.forEach((r, i) => {
+          if (f.sizes[i]! > 1) expect(r.w * r.h).toBeGreaterThan(190 * 160 * 0.8)
         })
-        const pairs = f.links.map((l) => `${l.a}-${l.b}`)
-        expect(new Set(pairs).size).toBe(pairs.length)
       }
     }
+    expect(Math.max(...floors2(2).flatMap((f) => f.sizes))).toBeGreaterThanOrEqual(6)
   })
 
-  it('sets rooms aside as ambushes, each with its prize inside it, never the start or the stairs', () => {
+  it('keeps the ambushes to big rooms, never the start or the stairs, with prizes in them (more in the bigger ones)', () => {
     for (const index of [0, 1, 2]) {
       for (const f of floors2(index)) {
-        expect(f.ambush).toHaveLength(CAVE_GEN.ambush[index]!)
+        expect(f.ambush.length).toBeGreaterThan(0)
+        expect(f.ambush.length).toBeLessThanOrEqual(CAVE_GEN.ambush[index]!)
         expect(new Set(f.ambush).size).toBe(f.ambush.length)
-        expect(f.prizes).toHaveLength(f.ambush.length)
-        f.ambush.forEach((room, i) => {
+        for (const room of f.ambush) {
+          expect(f.sizes[room]).toBeGreaterThan(1)
           expect(room).not.toBe(f.startRoom)
           expect(room).not.toBe(f.stairsRoom)
-          expect(roomAt(f, ...f.prizes[i]!)).toBe(room)
-        })
+          const prizes = f.prizes.filter((p) => roomAt(f, ...p) === room)
+          expect(prizes).toHaveLength(1 + (f.sizes[room]! >= 4 ? 1 : 0) + (f.sizes[room]! >= 6 ? 1 : 0))
+        }
+        expect(f.prizes.every((p) => f.ambush.includes(roomAt(f, ...p)))).toBe(true)
         for (const p of [...f.items, ...f.crystals, ...f.rocks, ...f.prizes]) expect(onFloor(f, p, 4)).toBe(true)
       }
     }
   })
 
-  it('leaves room for the player along every corridor, and lays out the same floor from the same seed', () => {
-    for (const f of floors2(2)) for (const link of f.links) for (const [x, y] of link.path) expect(onFloor(f, [x, y], 12)).toBe(true)
+  it('leaves room for the player along every corridor, funnels a body into it, and lays out the same floor from the same seed', () => {
+    for (const f of floors2(2)) {
+      const shapes = floorShapes(f)
+      for (const link of f.links) {
+        for (const [x, y] of link.path) expect(onFloor(f, [x, y], 12)).toBe(true)
+        const room = f.rooms[link.a]!
+        const [cx, cy] = link.path[0]!
+        const across = link.path[1]![0] !== cx
+        for (const off of [-16, 16]) {
+          const o = across ? { x: room.x + room.w - 24, y: cy + off } : { x: cx + off, y: room.y + room.h - 24 }
+          for (let i = 0; i < 40; i++) {
+            if (across) o.x += 1.5
+            else o.y += 1.5
+            keepOn(shapes, [], o, 8)
+          }
+          expect(across ? o.x : o.y).toBeGreaterThan((across ? room.x + room.w : room.y + room.h) + 20)
+        }
+      }
+    }
     expect(generateFloorV2(createRng(9), 2)).toEqual(generateFloorV2(createRng(9), 2))
     expect(generateFloorV2(createRng(9), 2)).not.toEqual(generateFloorV2(createRng(10), 2))
   })
