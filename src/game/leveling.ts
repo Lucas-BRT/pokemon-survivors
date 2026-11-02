@@ -1,3 +1,4 @@
+import { applyDebugStats } from './debugTune'
 import { retain } from '../engine/math'
 import type { Rng } from '../engine/rng'
 import { evolvedFrom, readyEvolutions } from '../data/evolutions'
@@ -276,6 +277,7 @@ export const recomputeStats = (g: Game) => {
   const stats = boostStats(stanceStats(deltas, p.special.stance), p.boost + (p.evoHeld ? BAG_ITEMS.everstone.effect.everstone : 0))
   // Versus plays with more HP (`versusStats`), so a rival's moves take a moment.
   p.stats = p.versus ? versusStats(stats) : stats
+  applyDebugStats(p.stats)
   if (p.stats.maxHp > before) p.hp += p.stats.maxHp - before
   p.hp = Math.min(p.hp, p.stats.maxHp)
 }

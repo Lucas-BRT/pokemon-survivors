@@ -151,17 +151,21 @@ export const buildCave = (g: Game, x: number, y: number, level = 1) => {
  * Loot still lying around comes along (it flies to a player as they arrive),
  * and the floor's title card holds everything still for a moment.
  */
-export const descendCave = (g: Game, inside: CaveInside) => {
+export const descendCave = (g: Game, inside: CaveInside) => laidFloor(g, inside, inside.state.floor + 1)
+
+/** Lays the floor the team is on out again (a new draw from the run's rng): the debug menu's "Regerar andar". */
+export const relayCave = (g: Game, inside: CaveInside) => laidFloor(g, inside, inside.state.floor)
+
+const laidFloor = (g: Game, inside: CaveInside, next: number) => {
   const s = inside.state
   g.enemies = []
   g.hazards = []
   g.bossId = null
   for (const k of g.pickups) k.attracted = true
-  const f = layFloor(g, inside.x, inside.y, s.floor + 1, s.level)
+  const f = layFloor(g, inside.x, inside.y, next, s.level)
   const start = f.start
   inside.layout = f.layout
   inside.terrain = { solids: f.solids, lake: null }
-  const next = s.floor + 1
   // The generated cave keeps a clock per floor, and the wind starts over with it.
   if (PROCGEN.cave) inside.left = next >= caveLevel(s.level).floors ? CAVE_GEN.chamberTime : floorClock(s.level, next)
   inside.state = { ...stateOf(f, next, s.level), wind: PROCGEN.cave ? 0 : s.wind }

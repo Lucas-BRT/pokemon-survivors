@@ -1,11 +1,14 @@
 import { BIOMES, WEATHER_IDS, type BiomeId, type WeatherId } from '../data/biomes'
 import { CAVE_LEVEL_COUNT, caveLevel } from '../data/caveLevels'
 import { ENEMIES, type EnemyId } from '../data/enemies'
-import { MAZE_RUN } from '../data/mazeEvents'
+import { MAZE_CAST, MAZE_DEBUG, MAZE_RUN } from '../data/mazeEvents'
 import { setBiome } from '../game/biomes'
-import { descendCave, springAmbush, springHouse } from '../game/cave'
+import { descendCave, relayCave, springAmbush, springHouse } from '../game/cave'
 import { applyLab, goToMaze, type Lab } from '../game/debugStart'
-import { DEBUG_TUNE, resetTune } from '../game/debugTune'
+import { DEBUG_RUN, DEBUG_STATS, DEBUG_TUNE, resetTune, TUNED_STATS, type TunedStat } from '../game/debugTune'
+import { gainXp, recomputeStats } from '../game/leveling'
+import { MOVES, type MoveId } from '../game/moves'
+import { createRng } from '../engine/rng'
 import { roomAt } from '../game/dungeon'
 import { killEnemy } from '../game/combat'
 import { enterPlace, exitPlace } from '../game/placeInterior'
@@ -15,6 +18,8 @@ import { placeTeam } from '../game/players'
 import { setWeather } from '../game/weather'
 import type { Game } from '../game/types'
 import { LIT_DEFAULTS, lit, retune, roomLevel, type Lit } from '../render/caveSight'
+import { DEBUG_VIEW } from '../render/debugOverlay'
+import { copyText, renderData } from './debugData'
 import { h } from './dom'
 
 /**
@@ -31,6 +36,8 @@ type Ctl =
   | { t: 'slider'; label: string; min: number; max: number; step: number; get: () => number; set: (n: number) => void }
   | { t: 'toggle'; label: string; get: () => boolean; set: (on: boolean) => void }
   | { t: 'select'; label: string; options: readonly string[]; get: () => string; set: (v: string) => void }
+  | { t: 'number'; label: string; get: () => number; set: (n: number) => void }
+  | { t: 'custom'; render: (into: HTMLElement, say: (text: string) => void) => void }
   | { t: 'buttons'; items: ReadonlyArray<{ label: string; run: () => string | void }> }
 
 type Tab = { id: string; label: string; controls: (g: Game | undefined) => Ctl[] }
@@ -137,13 +144,15 @@ const lightTab: Tab = {
       items: [
         { label: 'Aplicar sala', run: () => (g && applyLab(g, { ...lab, size: lab.size || 1 }) ? 'Sala aplicada (B2F do laboratório).' : NEED_CAVE) },
         { label: 'Restaurar', run: () => { Object.assign(lit, LIT_DEFAULTS); retune(); return 'Luz restaurada.' } },
-        { label: 'Copiar', run: () => { const text = JSON.stringify(lit, null, 2); console.log(text); void navigator.clipboard?.writeText(text); return 'Valores copiados (e no console).' } },
+        { label: 'Copiar', run: () => { const text = JSON.stringify(lit, null, 2); console.log(text); copyText(text); return 'Valores copiados (e no console).' } },
       ],
     },
   ],
 }
 
 let caveLevelPick = 3
+let caveSeed = 1
+let worldSeed = 1
 
 /** The cave the team is in, if any. */
 const caveOf = (g: Game | undefined) => (g?.place.inside?.id === 'cave' ? g.place.inside : null)
@@ -210,6 +219,15 @@ const caveTab: Tab = {
           { label: 'Revelar andar', run: () => { const inside = caveOf(g); if (!g || !inside?.state.plan) return NEED_CAVE; inside.state.visited = inside.state.plan.rooms.map((_, i) => i) } },
           { label: 'Acender cristais', run: () => { const inside = caveOf(g); if (!inside) return NEED_CAVE; inside.state.touched = inside.state.lights.map((_, i) => ({ i, left: 999, age: 99 })) } },
           { label: 'Apagar cristais', run: () => { const inside = caveOf(g); if (!inside) return NEED_CAVE; inside.state.touched = [] } },
+        ],
+      },
+      { t: 'title', label: 'Geração' },
+      { t: 'number', label: 'Seed do sorteio (rng da run)', get: () => caveSeed, set: (n) => (caveSeed = n) },
+      {
+        t: 'buttons',
+        items: [
+          { label: 'Regerar andar', run: () => { const inside = caveOf(g); if (!g || !inside) return NEED_CAVE; relayCave(g, inside) } },
+          { label: 'Aplicar seed e regerar', run: () => { const inside = caveOf(g); if (!g || !inside) return NEED_CAVE; g.rng = createRng(caveSeed); relayCave(g, inside); return `seed ${caveSeed}` } },
         ],
       },
       { t: 'title', label: 'Perigos' },
@@ -317,6 +335,16 @@ const mazeTab: Tab = {
           { label: 'Ir a uma armadilha', run: () => { const r = run()?.run; const t = r?.traps.find((x) => !x.done); if (!g || !t) return 'Nenhuma armadilha.'; placeTeam(g, t.x, t.y + 40) } },
         ],
       },
+      { t: 'title', label: 'Tema e geração' },
+      { t: 'select', label: 'Tema forçado', options: ['', ...[...new Set(Object.values(MAZE_CAST).flatMap((k) => k.themes.map((t) => t.id)))]], get: () => MAZE_DEBUG.theme, set: (v) => (MAZE_DEBUG.theme = v) },
+      { t: 'number', label: 'Seed do mundo (muda o terreno)', get: () => worldSeed, set: (n) => (worldSeed = n) },
+      {
+        t: 'buttons',
+        items: [
+          { label: 'Reconstruir conteúdo', run: () => { const here = run(); if (!g || !here) return 'Entre num labirinto.'; g.mazes.delete(here.site.key); for (const e of [...g.enemies]) if (e.home === here.site.key) e.dying < 0 && killEnemy(g, e) } },
+          { label: 'Novo mundo e ir ao labirinto', run: () => { if (!g) return NEED_RUN; g.terrain.seed = worldSeed; g.mazes.clear(); g.enemies.length = 0; return goToMaze(g, false) ? `seed ${worldSeed}` : 'Nenhum labirinto.' } },
+        ],
+      },
       { t: 'title', label: 'Moradores' },
       { t: 'slider', label: 'Taxa e teto dos moradores', min: 0, max: 6, step: 0.1, get: () => DEBUG_TUNE.maze, set: (n) => (DEBUG_TUNE.maze = n) },
       {
@@ -359,6 +387,28 @@ const worldTab: Tab = {
 }
 
 let coinsStep = 1000
+let moveId: MoveId = 'ember' as MoveId
+let moveLevel = 5
+let xpAmount = 200
+
+/** Slider range and step of each stat the menu adds to. */
+const STAT_RANGE: Record<TunedStat, readonly [number, number, number]> = {
+  maxHp: [-90, 600, 5],
+  speed: [-50, 120, 1],
+  might: [-0.9, 5, 0.05],
+  area: [-0.8, 3, 0.05],
+  cooldown: [-0.8, 1, 0.05],
+  duration: [-0.8, 3, 0.05],
+  amount: [0, 10, 1],
+  projectileSpeed: [-0.8, 3, 0.05],
+  magnet: [-40, 400, 5],
+  regen: [0, 30, 0.5],
+  armor: [0, 40, 1],
+  growth: [-0.8, 5, 0.1],
+  greed: [-0.8, 5, 0.1],
+  statusChance: [0, 1, 0.05],
+  statusDamage: [0, 3, 0.1],
+}
 
 const playerTab: Tab = {
   id: 'player',
@@ -374,6 +424,23 @@ const playerTab: Tab = {
         { label: 'Evoluir', run: () => ps('evolve') },
       ],
     },
+    { t: 'title', label: 'Atributos (soma ao que os itens dão)' },
+    ...TUNED_STATS.map((k): Ctl => {
+      const r = STAT_RANGE[k]
+      return { t: 'slider', label: k, min: r[0], max: r[1], step: r[2], get: () => DEBUG_STATS[k] ?? 0, set: (n) => { DEBUG_STATS[k] = n; if (g) recomputeStats(g) } }
+    }),
+    { t: 'title', label: 'Golpes e experiência' },
+    { t: 'select', label: 'Golpe', options: (Object.keys(MOVES) as MoveId[]).sort(), get: () => moveId, set: (v) => (moveId = v as MoveId) },
+    { t: 'slider', label: 'Nível do golpe', min: 1, max: 9, step: 1, get: () => moveLevel, set: (n) => (moveLevel = n) },
+    { t: 'slider', label: 'XP a dar', min: 10, max: 5000, step: 10, get: () => xpAmount, set: (n) => (xpAmount = n) },
+    {
+      t: 'buttons',
+      items: [
+        { label: 'Aprender golpe', run: () => { const out = ps('learn', moveId, moveLevel); return out ?? `${moveId} Nv ${moveLevel}` } },
+        { label: '+ XP', run: () => { if (g) gainXp(g, xpAmount) } },
+      ],
+    },
+    { t: 'title', label: 'Dinheiro' },
     { t: 'slider', label: 'Quantidade de ₽ / gemas', min: 100, max: 100000, step: 100, get: () => coinsStep, set: (n) => (coinsStep = n) },
     {
       t: 'buttons',
@@ -390,19 +457,66 @@ const gameTab: Tab = {
   id: 'game',
   label: 'Jogo',
   controls: (g) => [
-    { t: 'toggle', label: 'Congelar a simulação (continua desenhando)', get: () => holds.freeze, set: (on) => { holds.freeze = on; if (g && !on) g.hitstop = 0 } },
+    { t: 'info', text: () => (g ? `seed ${g.terrain.seed} · tick ${Math.round(g.now * 60)} · escala ${DEBUG_RUN.scale}x` : NEED_RUN) },
+    { t: 'title', label: 'Tempo' },
+    { t: 'slider', label: 'Velocidade da simulação (0 = pausada)', min: 0, max: 3, step: 0.05, get: () => DEBUG_RUN.scale, set: (n) => (DEBUG_RUN.scale = n) },
+    { t: 'slider', label: 'Ticks a avançar', min: 1, max: 600, step: 1, get: () => stepCount, set: (n) => (stepCount = n) },
+    {
+      t: 'buttons',
+      items: [
+        { label: 'Pausar', run: () => { DEBUG_RUN.scale = 0 } },
+        { label: 'Avançar', run: () => { DEBUG_RUN.steps = stepCount } },
+        { label: 'Normal', run: () => { DEBUG_RUN.scale = 1 } },
+      ],
+    },
+    { t: 'toggle', label: 'Congelar com hitstop (continua desenhando)', get: () => holds.freeze, set: (on) => { holds.freeze = on; if (g && !on) g.hitstop = 0 } },
+    { t: 'title', label: 'Estado da run' },
+    {
+      t: 'buttons',
+      items: [
+        { label: 'Salvar snapshot', run: () => ps('snap') },
+        { label: 'Voltar ao snapshot', run: () => ps('restore') },
+        {
+          label: 'Copiar replay',
+          run: () => {
+            const text = (window as unknown as { ps?: Record<string, PsCall> }).ps?.replayJson?.()
+            if (typeof text !== 'string') return 'Sem run.'
+            copyText(text)
+            return `Replay copiado (${(text.length / 1024).toFixed(0)} KB).`
+          },
+        },
+      ],
+    },
+    { t: 'title', label: 'Desenho' },
     { t: 'select', label: 'Qualidade de desenho', options: ['auto', 'full', 'lean'], get: () => 'auto', set: (v) => void ps('quality', v) },
     {
       t: 'buttons',
       items: [
-        { label: 'Zerar knobs', run: () => { resetTune(); Object.assign(lit, LIT_DEFAULTS); retune(); holds.god = holds.freeze = holds.wind = false } },
-        { label: 'Copiar estado', run: () => { const text = JSON.stringify({ tune: DEBUG_TUNE, lit, cave: caveLevelPick }, null, 2); console.log(text); void navigator.clipboard?.writeText(text); return 'Copiado (e no console).' } },
+        { label: 'Zerar knobs', run: () => { resetTune(); Object.assign(lit, LIT_DEFAULTS); retune(); Object.assign(DEBUG_VIEW, { hitboxes: false, rooms: false, levels: false, maze: false, counters: false }); MAZE_DEBUG.theme = ''; holds.god = holds.freeze = holds.wind = false; if (g) recomputeStats(g) } },
+        { label: 'Copiar estado', run: () => { const text = JSON.stringify({ tune: DEBUG_TUNE, stats: DEBUG_STATS, lit, view: DEBUG_VIEW, cave: caveLevelPick }, null, 2); console.log(text); copyText(text); return 'Copiado (e no console).' } },
       ],
     },
   ],
 }
 
-const TABS: readonly Tab[] = [lightTab, caveTab, spawnTab, mazeTab, worldTab, playerTab, gameTab]
+let stepCount = 60
+
+const viewTab: Tab = {
+  id: 'view',
+  label: 'Visão',
+  controls: () => [
+    { t: 'info', text: () => 'Camadas desenhadas sobre o mundo (só em dev).' },
+    { t: 'toggle', label: 'Hitboxes (inimigos, jogador, golpes, perigos)', get: () => DEBUG_VIEW.hitboxes, set: (on) => (DEBUG_VIEW.hitboxes = on) },
+    { t: 'toggle', label: 'Salas e corredores da caverna', get: () => DEBUG_VIEW.rooms, set: (on) => (DEBUG_VIEW.rooms = on) },
+    { t: 'toggle', label: 'Nível de luz de cada sala', get: () => DEBUG_VIEW.levels, set: (on) => (DEBUG_VIEW.levels = on) },
+    { t: 'toggle', label: 'Células do labirinto (passos a partir de você)', get: () => DEBUG_VIEW.maze, set: (on) => (DEBUG_VIEW.maze = on) },
+    { t: 'toggle', label: 'Contadores da run', get: () => DEBUG_VIEW.counters, set: (on) => (DEBUG_VIEW.counters = on) },
+  ],
+}
+
+const dataTab: Tab = { id: 'data', label: 'Dados', controls: () => [{ t: 'custom', render: (into, say) => renderData(into, say) }] }
+
+const TABS: readonly Tab[] = [lightTab, caveTab, spawnTab, mazeTab, worldTab, playerTab, viewTab, gameTab, dataTab]
 
 /* ---------------- The panel ---------------- */
 
@@ -461,6 +575,15 @@ const draw = (body: HTMLElement, tab: Tab, g: Game | undefined, say: (text: stri
         into.append(h('label', { class: 'dm-line' }, h('span', {}, c.label), input))
         break
       }
+      case 'number': {
+        const input = h('input', { type: 'number', value: String(c.get()), style: 'width:110px' }) as HTMLInputElement
+        input.addEventListener('input', () => Number.isFinite(Number(input.value)) && c.set(Number(input.value)))
+        into.append(h('label', { class: 'dm-line' }, h('span', {}, c.label), input))
+        break
+      }
+      case 'custom':
+        c.render(into, say)
+        break
       case 'buttons':
         into.append(
           h(

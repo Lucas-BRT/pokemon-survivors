@@ -69,8 +69,13 @@ export const MAZE_CAST = {
 export const MAZE_THEME_IDS = ['spores', 'bugs', 'swamp', 'thorns', 'webs', 'iron', 'junk', 'ice', 'bandits', 'spirits', 'golems'] as const
 
 /** The theme of the maze with this seed in a biome: drawn from the seed alone, so every client and the replay agree. */
+/** The debug menu's pick of a theme for every maze (empty: drawn from the seed). Dev only. */
+export const MAZE_DEBUG = { theme: '' }
+
 export const mazeTheme = (biome: BiomeId, seed: number): MazeTheme => {
   const themes: readonly MazeTheme[] = MAZE_CAST[biome].themes
+  const forced = themes.find((t) => t.id === MAZE_DEBUG.theme)
+  if (forced) return forced
   return themes[Math.floor(hash2(seed, 7, 41) * themes.length)]!
 }
 

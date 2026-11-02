@@ -167,6 +167,8 @@ import { abilityPick, branchPick } from './ui/abilityPick'
 import { tmPick } from './ui/tmPick'
 import { caveShopPick } from './ui/caveShop'
 import { keepDebugHolds, toggleDebugMenu } from './ui/debugMenu'
+import { DEBUG_RUN } from './game/debugTune'
+import { restore, snapshot } from './game/snapshot'
 import { isSettingsOpen, openSettings, settings, toggleMute } from './ui/settings'
 import { mapEventFeedback } from './ui/mapEvents'
 import { runShare, sharePreview, trainerShare } from './ui/share'
@@ -3366,7 +3368,12 @@ const frame = (now: number) => {
     const g = r.game
     let steps = 0
     if (g.phase === 'playing' || g.phase === 'evolving') {
-      advancePacer(pace, dt, STEP)
+      advancePacer(pace, dt * DEBUG_RUN.scale, STEP)
+      // The debug menu's "avançar": a paused run plays this many ticks at once.
+      if (DEBUG_RUN.steps > 0) {
+        pace.acc += DEBUG_RUN.steps * STEP
+        DEBUG_RUN.steps = 0
+      }
       // A level-up or a faint ends the frame's steps: the ones left over would go into the replay as ticks the run never played.
       while (pace.acc >= STEP && (g.phase === 'playing' || g.phase === 'evolving')) {
         // The simulation gets the stick as the replay stores it (`moveCode`), so a re-simulation sees the same run.
@@ -4184,6 +4191,9 @@ const devArena = (cmd?: string, arg?: string, then?: string) => {
   return "ps.arena('hub', tab) · ('fake', scenario?) · ('queue', 'ranked' | 'casual', 'match' | 'downgrade' | 'hold' | 'blocked') · ('end', kind) · ('season', 'pre' | 'on')"
 }
 
+/** The run `ps.snap()` saved. */
+let debugSnap: Uint8Array | null = null
+
 // `ps.biome('cave')` and `ps.weather('rain')` stage a run for screenshots (they hold until the next scheduled change).
 if (import.meta.env.DEV) {
   window.addEventListener('keydown', (e) => {
@@ -4197,6 +4207,21 @@ if (import.meta.env.DEV) {
   Object.assign(window, {
     ps: {
       run: () => run,
+      /** A saved copy of the run (`ps.snap()`), and the run put back as it was (`ps.restore()`): to try one thing twice. */
+      snap: () => {
+        if (!run) return 'ps: start a run first'
+        debugSnap = snapshot(run.game)
+        return `Snapshot: ${(debugSnap.length / 1024).toFixed(0)} KB at ${run.game.time.toFixed(1)}s`
+      },
+      restore: () => {
+        if (!run || !debugSnap) return 'Sem snapshot.'
+        run.game = restore(debugSnap)
+        run.shown = null
+        return `Voltou a ${run.game.time.toFixed(1)}s`
+      },
+      /** The run's replay as JSON (what an error report carries), to play again with `ps.replay(json)`. */
+      replayJson: () => (run ? JSON.stringify(run.recorder.replay) : 'ps: start a run first'),
+      seed: () => run?.game.terrain.seed,
       /** The debug menu (F4 too): a tab each for the cave's light, the cave, the spawns, the maze, the world, the player and the game (`ui/debugMenu.ts`). */
       debug: () => toggleDebugMenu(() => run?.game),
       light: () => toggleDebugMenu(() => run?.game),

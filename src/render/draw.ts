@@ -63,6 +63,7 @@ import { dropFog, drawWeather, warmFog, type FogMode } from './weather'
 import { drawHauntedNight, drawTreat } from './halloweenArt'
 import { drawMazeGround } from './mazeArt'
 import { mazeSees, rememberMazes } from './mazeSight'
+import { drawDebugOverlay } from './debugOverlay'
 import { drawSolid, drawTerrainGround, drawWading, keepTerrain, solidCovers, solidsInView, warmTerrain } from './terrain'
 import { drawGround, GROUND_LOOKAHEAD, warmGround } from './world'
 import { damageBudget, showsText, textAlpha, type DamageNumbers } from './damageNumbers'
@@ -1206,6 +1207,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   // The cave's dark and the graveyard's night, then the weather, over the world but under damage numbers.
   drawPlaceDark(ctx, g, camX, camY, t)
   rememberMazes(g)
+  if (import.meta.env.DEV) drawDebugOverlay(ctx, g, camX, camY)
   drawNightmareDark(ctx, g, camX, camY, t)
   drawTunnelDark(ctx, g, camX, camY)
   drawWeather(ctx, g, camX, camY, t, opts.fog)
