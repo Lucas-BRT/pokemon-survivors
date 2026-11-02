@@ -2,10 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { CAVE } from '../data/places'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { descendCave, updateCave } from './cave'
-import { createGame } from './game'
+import { chooseOffer, createGame, step } from './game'
+import { spawnEnemy } from './enemies'
+import { roomAt } from './dungeon'
 import { enterPlace } from './placeInterior'
 import { TICK } from './replay'
 import type { Game } from './types'
+
+const STILL = { move: { x: 0, y: 0 }, special: false }
+
+/** Plays `seconds` of the run, taking the first card of any pick screen that comes up. */
+const play = (g: Game, seconds: number) => {
+  const end = g.now + seconds
+  while (g.now < end) {
+    if (g.phase !== 'playing') chooseOffer(g, g.player.offers[0]!)
+    step(g, STILL, TICK)
+  }
+}
 
 /** A run standing in a cave's first floor (the dungeon is laid out around the world's origin). */
 const inCave = (seed = 5) => {
@@ -74,5 +87,62 @@ describe.skipIf(!PROCGEN.cave)('the generated cave at play', () => {
     const plan = inside.state.plan!
     const inRoom = (room: number) => g.pickups.filter((k) => plan.rooms[room] && k.x >= inside.x + plan.rooms[room]!.x && k.x <= inside.x + plan.rooms[room]!.x + plan.rooms[room]!.w && k.y >= inside.y + plan.rooms[room]!.y && k.y <= inside.y + plan.rooms[room]!.y + plan.rooms[room]!.h)
     for (const room of plan.ambush) expect(inRoom(room).length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe.skipIf(!PROCGEN.caveSight)('what the cave’s walkers see', () => {
+  /** The player in the start room and the world px of the middle of room `i`. */
+  const setup = () => {
+    const { g, inside } = inCave(7)
+    inside.intro = 0
+    const plan = inside.state.plan!
+    const mid = (i: number) => ({ x: inside.x + plan.rooms[i]!.x + plan.rooms[i]!.w / 2, y: inside.y + plan.rooms[i]!.y + plan.rooms[i]!.h / 2 })
+    Object.assign(g.player, mid(plan.startRoom))
+    // No moves: a shot that reached a walker would alert it (that is its own case below).
+    g.player.moves.length = 0
+    return { g, inside, plan, mid }
+  }
+
+  it('leave one in another room unaware, and make one in the player’s own room (within range) hunt for `memory` seconds', () => {
+    const { g, plan, mid } = setup()
+    const far = spawnEnemy(g, 'zubat', mid(plan.stairsRoom).x, mid(plan.stairsRoom).y)
+    const near = spawnEnemy(g, 'zubat', g.player.x + 60, g.player.y)
+    step(g, STILL, TICK)
+    expect(far.alert).toBe(0)
+    expect(near.alert).toBe(CAVE.sight.memory)
+  })
+
+  it('remember a player lost from sight for `memory` seconds, then go back to ambling about', () => {
+    const { g, plan, mid } = setup()
+    const e = spawnEnemy(g, 'zubat', mid(plan.stairsRoom).x, mid(plan.stairsRoom).y)
+    e.alert = CAVE.sight.memory
+    play(g, CAVE.sight.memory - 0.5)
+    expect(e.alert).toBeGreaterThan(0)
+    play(g, 1)
+    expect(e.alert).toBe(0)
+  })
+
+  it('turn on the player who hit them from anywhere, and hunt with the ambush’s longer memory when sprung', () => {
+    const { g, inside, plan, mid } = setup()
+    const e = spawnEnemy(g, 'zubat', mid(plan.stairsRoom).x, mid(plan.stairsRoom).y)
+    e.flash = 0.16
+    step(g, STILL, TICK)
+    expect(e.alert).toBe(CAVE.sight.memory)
+    const room = plan.ambush[0]!
+    const rect = plan.rooms[room]!
+    const before = g.enemies.length
+    Object.assign(g.player, { x: inside.x + rect.x + 24, y: inside.y + rect.y + 24 })
+    updateCave(g, inside, TICK)
+    const pack = g.enemies.slice(before)
+    expect(pack.length).toBeGreaterThan(0)
+    expect(pack.every((m) => m.alert === CAVE.sight.ambush)).toBe(true)
+  })
+
+  it('keep a far unaware walker where the cave put it, instead of wrapping it back in front of the player', () => {
+    const { g, plan, mid } = setup()
+    const e = spawnEnemy(g, 'zubat', mid(plan.stairsRoom).x, mid(plan.stairsRoom).y)
+    const room = roomAt(plan, e.x - g.place.inside!.x, e.y - g.place.inside!.y)
+    play(g, 3)
+    expect(roomAt(plan, e.x - g.place.inside!.x, e.y - g.place.inside!.y)).toBe(room)
   })
 })

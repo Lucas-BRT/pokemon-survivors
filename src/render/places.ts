@@ -5,6 +5,7 @@ import type { ArenaShape, FloorPlan, Pt } from '../data/arenas'
 import { CAVE, GRAVEYARD, PLACE, PLACES, SKY, type PlaceId, type WingId } from '../data/places'
 import { fits } from '../game/arenaFloor'
 import { caveLight } from '../game/cave'
+import { caveFog, SEEN_SCALE, wasSeen } from './caveSight'
 import type { PlaceEntrance, PlaceInterior, PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
 import { art, toIconUrl } from './art'
@@ -519,9 +520,21 @@ export const drawPlaceDark = (ctx: Ctx, g: Game, camX: number, camY: number, t: 
   const d = layer.ctx
   d.globalCompositeOperation = 'source-over'
   d.clearRect(0, 0, w, h)
-  d.fillStyle = inside.id === 'cave' ? 'rgba(6,4,10,0.94)' : 'rgba(14,8,30,0.5)'
+  d.fillStyle = inside.id === 'cave' ? 'rgba(6,4,10,0.985)' : 'rgba(14,8,30,0.5)'
   d.fillRect(0, 0, w, h)
   d.globalCompositeOperation = 'destination-out'
+  // The cave floor's seen part: where the team's light has been, which stays faintly known; the rest stays black.
+  const plan = inside.id === 'cave' ? inside.state.plan : null
+  const seen = plan ? caveFog(g, plan) : null
+  if (seen) {
+    d.fillStyle = 'rgba(0,0,0,0.17)'
+    const S = SEEN_SCALE
+    for (let my = Math.floor(camY / S); my <= Math.floor((camY + h) / S); my++) {
+      for (let mx = Math.floor(camX / S); mx <= Math.floor((camX + w) / S); mx++) {
+        if (seen.has((mx & 0xffff) * 0x10000 + (my & 0xffff))) d.fillRect(Math.round(mx * S - camX), Math.round(my * S - camY), S, S)
+      }
+    }
+  }
   const cut = (x: number, y: number, r: number) => {
     const disc = lightDisc(Math.max(4, Math.round(r)))
     d.drawImage(disc, Math.round(x - camX - disc.width / 2), Math.round(y - camY - disc.height / 2))
@@ -534,12 +547,14 @@ export const drawPlaceDark = (ctx: Ctx, g: Game, camX: number, camY: number, t: 
   const litBy: Array<readonly [number, number, number]> = [[p.x, p.y - 10, reach * 0.8]]
   if (inside.id === 'cave') {
     const s = inside.state
+    // A glow only shows once the light has reached it: crystals, stairs and chest of rooms not visited yet stay black.
     for (const [lx, ly] of s.lights) {
+      if (seen && !wasSeen(seen, inside.x + lx, inside.y + ly)) continue
       cut(inside.x + lx, inside.y + ly - 6, 34 + Math.round(Math.sin(t * 2 + lx) * 1.5))
       litBy.push([inside.x + lx, inside.y + ly - 6, 26])
     }
-    if (s.stairs) cut(inside.x + s.stairs[0], inside.y + s.stairs[1], 24 + Math.round(Math.sin(t * 3) * 2))
-    if (s.chest) cut(inside.x + s.chest.x, inside.y + s.chest.y - 6, 30)
+    if (s.stairs && (!seen || wasSeen(seen, inside.x + s.stairs[0], inside.y + s.stairs[1]))) cut(inside.x + s.stairs[0], inside.y + s.stairs[1], 24 + Math.round(Math.sin(t * 3) * 2))
+    if (s.chest && (!seen || wasSeen(seen, inside.x + s.chest.x, inside.y + s.chest.y))) cut(inside.x + s.chest.x, inside.y + s.chest.y - 6, 30)
     let n = 0
     for (const a of g.attacks) {
       if (n > 24 || a.age < 0 || (a.type !== 'fire' && a.type !== 'electric')) continue
@@ -559,6 +574,8 @@ export const drawPlaceDark = (ctx: Ctx, g: Game, camX: number, camY: number, t: 
   for (const e of g.enemies) {
     if (e.dying >= 0 || e.x < camX - 8 || e.y < camY - 8 || e.x > camX + w + 8 || e.y > camY + h + 40) continue
     if (litBy.some(([lx, ly, r]) => (e.x - lx) ** 2 + (e.y - 10 - ly) ** 2 < r * r)) continue
+    // Eyes only where the team has been: nothing of the rooms still unseen.
+    if (seen && !wasSeen(seen, e.x, e.y)) continue
     // A blink now and then.
     if (hash2(e.id, Math.floor(t * 2.5), 5) < 0.12) continue
     const def: EnemyDef = ENEMIES[e.kind]

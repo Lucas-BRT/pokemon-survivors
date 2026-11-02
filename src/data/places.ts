@@ -104,6 +104,12 @@ export const CAVE = {
   /** Standing this close to the chest for `chestTime` seconds opens it. */
   chestRadius: 24,
   chestTime: 1.5,
+  /**
+   * What a walker in the dungeon notices (`PROCGEN.caveSight`): a player in its own room or corridor within
+   * `range` px, or anyone within `hear` px even through a wall, or the one that hit it. It then hunts for
+   * `memory` seconds after losing sight (an ambush pack hunts for `ambush`), and ambles about otherwise.
+   */
+  sight: { range: 230, hear: 64, memory: 5, ambush: 12 },
 } as const
 
 /** The graveyard: how many spirits wake the Odd Keystone, and Spiritomb. */

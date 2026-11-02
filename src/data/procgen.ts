@@ -8,6 +8,8 @@ import type { EnemyId } from './enemies'
 export const PROCGEN = {
   /** Hedge mazes drawn from `generateMaze` instead of the six fixed patterns. */
   maze: true,
+  /** Walkers in a cave only hunt a player they can see (`CAVE.sight`) instead of knowing where everyone is. */
+  caveSight: true,
   /** Caves drawn by `generateFloorV2`: bigger floors, three of them, a clock per floor and ambush rooms. */
   cave: true,
   /** The generated maze's cells per side: a landmark fits `TERRAIN.cell - 2 * margin` = 244 px, so 7 cells of 32 px at most. */

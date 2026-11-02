@@ -188,6 +188,11 @@ As salas ficaram menos numerosas e bem maiores (a área mais que dobra: de 110 p
 
 **Versão das regras:** o experimento inteiro usa um único salto, `RULES_VERSION` 44 (o simulador congelado `server/sims/rules-43.mjs` foi gerado a partir do commit `cb8e4c9c`, o último sem mudança de regra). Os digests do `rulesGuard` e o *golden run* do Honedge foram refixados, e o teste de `snapshot` ganhou a tolerância `by` (assinatura de hazard, constante de módulo só lida) e perdeu o `tunnel` da lista de momentos obrigatórios, porque a rota do bot mudou e há um caso próprio do túnel.
 
+**Escuridão e visão dos inimigos** (decisão de 2026-11-01, `PROCGEN.caveSight` e `CAVE.sight`):
+- **Escuridão** (`render/places.ts`, `render/caveSight.ts`): o escuro da caverna ficou mais fechado (0,985 de opacidade) e só mostra o que a luz da equipe já alcançou. O brilho dos cristais, da escada e do baú, e os olhos dos Pokémon, só aparecem em áreas já vistas; as de salas ainda não visitadas ficam pretas. O que já foi visto fica levemente lembrado. A memória do que foi visto, antes presa ao minimapa, virou um módulo comum (`caveSight`), e o minimapa e o escuro leem o mesmo conjunto.
+- **Visão dos inimigos** (`game/enemies.ts`): na caverna, um inimigo só persegue um jogador que ele vê: na mesma sala ou corredor, a até 230 px; qualquer um a até 64 px, mesmo através da parede; ou quem o acertou. Depois de perder de vista, ele ainda caça por 5 s e então volta a vagar (`Enemy.alert`). As matilhas das emboscadas caçam por 12 s. Os inimigos fora de visão não são mais teletransportados para a frente do jogador.
+- Efeito colateral esperado: as cavernas dão menos XP, porque o spawn do escuro já não corre atrás de você. Isso tira o ritmo das partidas de teste (o teste de `snapshot` precisou de outra semente de cenário, a 11, para voltar a cobrir "evolving" e "domain:capture") e vai pedir ajuste de equilíbrio.
+
 **Ainda por fazer** (por ordem do que mais muda o jogo):
 1. Desafios no labirinto (emboscadas em becos, armadilhas, relógio): hoje ele só ficou maior e mais longo.
 2. Texto e aviso próprios da emboscada nos cinco idiomas.

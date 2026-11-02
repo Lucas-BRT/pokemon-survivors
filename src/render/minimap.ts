@@ -1,13 +1,12 @@
+import { caveFog, fogKey, SEEN_SCALE } from './caveSight'
 import { context2d, createCanvas, fromStrings, lazy, blitPacked, textSprite, type Palette, type PixelSprite } from '../engine/pixelart'
 import { hash2 } from '../engine/rng'
 import type { BiomeId } from '../data/biomes'
 import type { ArenaShape, FloorPlan } from '../data/arenas'
 import type { LandmarkId } from '../data/landmarks'
 import type { PlaceId } from '../data/places'
-import { caveLight } from '../game/cave'
 import { TERRAIN } from '../data/terrain'
 import { isMission } from '../game/fieldMissions'
-import type { DungeonFloor } from '../game/dungeon'
 import { MAP_EVENTS, type MapEventKind } from '../game/mapEvents'
 import { localPlayer } from '../game/players'
 import { roomOf, type Room } from '../game/room'
@@ -43,7 +42,7 @@ type Ctx = CanvasRenderingContext2D
 export type MinimapShape = 'square' | 'round'
 
 /** Map px a side; world px per map px on the map and in a room. */
-export const MINIMAP = { size: 64, scale: 26, roomScale: 14 } as const
+export const MINIMAP = { size: 64, scale: 26, roomScale: SEEN_SCALE } as const
 
 const S = MINIMAP.size
 const C = S / 2
@@ -382,28 +381,6 @@ const drawRoom = (ctx: Ctx, v: View, room: Room) => {
 
 /* ---------------- Cave fog ---------------- */
 
-/** Map px each cave floor's team has lit so far, by the floor's layout (a new floor starts dark). */
-const caveSeen = new WeakMap<DungeonFloor, Set<number>>()
-
-const fogKey = (mx: number, my: number) => (mx & 0xffff) * 0x10000 + (my & 0xffff)
-
-/**
- * The map px of the cave floor `plan` the team has seen: grows each draw by the
- * light around every player (`caveLight`, as the screen draws it), kept here so the simulation never knows.
- */
-const caveFog = (g: Game, plan: DungeonFloor, scale: number) => {
-  let seen = caveSeen.get(plan)
-  if (!seen) caveSeen.set(plan, (seen = new Set()))
-  const r = Math.ceil(caveLight(g) / scale)
-  for (const p of g.players) {
-    if (p.gone) continue
-    const px = Math.floor(p.x / scale)
-    const py = Math.floor(p.y / scale)
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r) seen.add(fogKey(px + dx, py + dy))
-  }
-  return seen
-}
-
 /** Covers every map px the team hasn't seen with the dark around the room. */
 const drawFog = (ctx: Ctx, v: View, seen: Set<number>) => {
   ctx.fillStyle = ROOM_LOOK.void
@@ -490,7 +467,7 @@ export const drawMinimap = (ctx: Ctx, g: Game, shape: MinimapShape, t: number) =
     drawRoom(ctx, v, room)
     const inside = g.place.inside
     // A cave floor is a maze to find the way through: only what the team has lit shows, the stairs once seen.
-    const seen = inside?.id === 'cave' && inside.state.plan ? caveFog(g, inside.state.plan, scale) : null
+    const seen = inside?.id === 'cave' && inside.state.plan ? caveFog(g, inside.state.plan) : null
     if (seen) drawFog(ctx, v, seen)
     const stairs = inside?.id === 'cave' ? inside.state.stairs : null
     if (inside && stairs) {

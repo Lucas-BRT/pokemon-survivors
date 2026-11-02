@@ -260,6 +260,8 @@ export type Enemy = {
   types: readonly PokeType[]
   x: number
   y: number
+  /** Seconds left it keeps hunting a player it saw or was hit by (a cave's walkers only see what's near, `CAVE.sight`); 0 unaware. */
+  alert: number
   /** Knockback velocity, decays every tick. */
   kx: number
   ky: number

@@ -404,6 +404,20 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
   return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush, prizes, sizes }
 }
 
+/**
+ * Which space of the floor holds (x, y): a room's index, `rooms.length` plus a
+ * corridor's index, or -1 in the rock between. Two walkers in the same space
+ * can see each other (`CAVE.sight`). Loops only, so it can run for every walker every tick.
+ */
+export const spaceAt = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, x: number, y: number) => {
+  for (let i = 0; i < floor.rooms.length; i++) if (inRect(floor.rooms[i]!, x, y)) return i
+  for (let l = 0; l < floor.links.length; l++) {
+    const rects = floor.links[l]!.rects
+    for (let i = 0; i < rects.length; i++) if (inRect(rects[i]!, x, y)) return floor.rooms.length + l
+  }
+  return -1
+}
+
 /** Index of the room holding (x, y), or -1. */
 export const roomAt = (floor: Pick<DungeonFloor, 'rooms'>, x: number, y: number) => floor.rooms.findIndex((r) => inRect(r, x, y))
 

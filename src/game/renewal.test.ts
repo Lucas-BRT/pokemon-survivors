@@ -13,7 +13,7 @@ const enemy = (over: Partial<Enemy> = {}): Enemy => ({
   id: 1,
   kind: 'rattata',
   types: ['normal'],
-  x: OFF, y: 100, kx: 0, ky: 0,
+  x: OFF, y: 100, kx: 0, ky: 0, alert: 0,
   hp: 50, maxHp: 100,
   damage: 10, speed: 40, mass: 1, radius: 6, xp: 1,
   boss: false, shiny: false, elite: false, runner: false, fight: null, bornAt: 0, cooldowns: [],

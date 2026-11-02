@@ -213,14 +213,14 @@ const springAmbush = (g: Game, inside: CaveInside, room: Rect, cells: number, by
   }
   for (let i = 0; i < count; i++) {
     const at = spot()
-    spawnEnemy(g, pack.mob[Math.floor(g.rng() * pack.mob.length)]!, at.x, at.y)
+    spawnEnemy(g, pack.mob[Math.floor(g.rng() * pack.mob.length)]!, at.x, at.y).alert = CAVE.sight.ambush
   }
   const cx = inside.x + room.x + room.w / 2
   const cy = inside.y + room.y + room.h / 2
   const lead = pack.leader
   if (lead && cells >= lead.minCells) {
-    if (lead.alpha) spawnAlpha(g, lead.kind, cx, cy)
-    else spawnEnemy(g, lead.kind, cx, cy)
+    const boss = lead.alpha ? spawnAlpha(g, lead.kind, cx, cy) : spawnEnemy(g, lead.kind, cx, cy)
+    boss.alert = CAVE.sight.ambush
   }
   shakeScreen(g, 4, { x: cx, y: cy })
   notifyPlace(g, 'cave', { kind: 'monsterHouse' })

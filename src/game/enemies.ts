@@ -13,7 +13,9 @@ import { isSpitter, spitBand, spitterStride } from './spitters'
 import { CONFUSE_BUMP, CONFUSE_CONTACT, createStatus, isFrozen, statusAttack, statusPace } from './status'
 import { enemyGroundPace } from './terrain'
 import { createTraitState, isAirborne, traitPace } from './traits'
-import { dungeonNav } from './dungeon'
+import { dungeonNav, spaceAt } from './dungeon'
+import { CAVE } from '../data/places'
+import { PROCGEN } from '../data/procgen'
 import { underground } from './landmarks'
 import { TRAITS } from '../data/traits'
 import { actAs, inPlay, nearestPlayer, nearestSeen, onAnyScreen, ownerOf, standing } from './players'
@@ -52,6 +54,7 @@ export const spawnEnemy = (g: Game, kind: EnemyId, x: number, y: number, behavio
     kind,
     types: def.types,
     x, y, kx: 0, ky: 0,
+    alert: 0,
     hp, maxHp: hp,
     damage: def.damage * scale.damage,
     speed: def.speed * (boss ? 1 : mods.enemySpeed) * (0.92 + g.rng() * 0.16),
@@ -197,7 +200,18 @@ export const updateEnemies = (g: Game, dt: number) => {
     let vx = 0
     let vy = 0
     const confused = e.status.confuse.time > 0
-    if (e.behavior.kind === 'chase' && (confused || p.hidden || lost)) {
+    // In the cave a walker only hunts what it can see: a player in its own room or corridor within range, anyone very near, or the one that hit it.
+    let unaware = false
+    if (cave && plan && PROCGEN.caveSight && e.behavior.kind === 'chase') {
+      const { range, hear, memory } = CAVE.sight
+      const d2 = dm.sq(p.x - e.x) + dm.sq(p.y - e.y)
+      const here = d2 <= range * range ? spaceAt(plan, e.x - cave.x, e.y - cave.y) : -1
+      const sees = e.flash > 0 || d2 <= hear * hear || (here >= 0 && here === spaceAt(plan, p.x - cave.x, p.y - cave.y))
+      if (sees && !p.hidden) e.alert = memory
+      else e.alert = Math.max(0, e.alert - dt)
+      unaware = e.alert <= 0
+    }
+    if (e.behavior.kind === 'chase' && (confused || p.hidden || lost || unaware)) {
       // Lost track of the player (confused, or the player burrowed or went into a tunnel): amble about.
       const h = e.status.heading + e.id * 2.4 + (confused ? 0 : g.now * 0.6)
       vx = dm.cos(h) * pace * LOST_PACE
@@ -270,8 +284,8 @@ export const updateEnemies = (g: Game, dt: number) => {
     // A spitter backing off keeps facing the player.
     if (Math.abs(vx) + Math.abs(vy) > 1) e.dir = isSpitter(e) && e.behavior.kind === 'chase' ? dir8(p.x - e.x, p.y - e.y) : dir8(vx, vy)
 
-    // Wrap stragglers back in front of the player instead of letting them get lost (in co-op, never onto a teammate's screen).
-    if (e.behavior.kind === 'chase' && !e.boss && Math.abs(e.x - p.x) + Math.abs(e.y - p.y) > recycleDist * 1.3) {
+    // Wrap stragglers back in front of the player instead of letting them get lost (in co-op, never onto a teammate's screen); not in a cave, where they only hunt what they see.
+    if (e.behavior.kind === 'chase' && !e.boss && !(cave && PROCGEN.caveSight) && Math.abs(e.x - p.x) + Math.abs(e.y - p.y) > recycleDist * 1.3) {
       const x = p.x + (p.x - e.x) * 0.7
       const y = p.y + (p.y - e.y) * 0.7
       if (g.coop === null || !onAnyScreen(g, x, y)) {
