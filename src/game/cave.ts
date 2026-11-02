@@ -232,7 +232,7 @@ const darkSpot = (inside: CaveInside) => (g: Game) => {
 }
 
 /** The Monster House: wild Pokémon all around the chest at once. */
-const springHouse = (g: Game, inside: CaveInside) => {
+export const springHouse = (g: Game, inside: CaveInside) => {
   inside.state.house = true
   const chest = inside.state.chest
   if (!chest) return
@@ -254,7 +254,7 @@ const springHouse = (g: Game, inside: CaveInside) => {
  * with the floor's leader in a big enough room: an Alpha, or a tough Pokémon
  * like Onix. They appear clear of whoever stepped in (`by`).
  */
-const springAmbush = (g: Game, inside: CaveInside, room: Rect, cells: number, by: { x: number; y: number }) => {
+export const springAmbush = (g: Game, inside: CaveInside, room: Rect, cells: number, by: { x: number; y: number }) => {
   const lv = caveLevel(inside.state.level)
   const pack = CAVE_GEN.packs[Math.min(inside.state.floor + lv.packShift, CAVE_GEN.packs.length - 1)]!
   const count = Math.min(dm.round(CAVE_GEN.packMax * lv.packSize), dm.round((pack.base + pack.perCell * (cells - 1)) * lv.packSize))

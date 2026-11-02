@@ -166,7 +166,7 @@ import { confirmDialog, flashScreen, levelUp, pauseMenu, results, textBox, type 
 import { abilityPick, branchPick } from './ui/abilityPick'
 import { tmPick } from './ui/tmPick'
 import { caveShopPick } from './ui/caveShop'
-import { toggleLightMenu } from './ui/lightMenu'
+import { keepDebugHolds, toggleDebugMenu } from './ui/debugMenu'
 import { isSettingsOpen, openSettings, settings, toggleMute } from './ui/settings'
 import { mapEventFeedback } from './ui/mapEvents'
 import { runShare, sharePreview, trainerShare } from './ui/share'
@@ -4189,15 +4189,17 @@ if (import.meta.env.DEV) {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'F4') {
       e.preventDefault()
-      toggleLightMenu(() => run?.game)
+      toggleDebugMenu(() => run?.game)
     }
   })
+  window.setInterval(() => keepDebugHolds(run?.game), 50)
   const withRun = (fn: (g: Game) => void) => (run ? fn(run.game) : console.warn('ps: start a run first'))
   Object.assign(window, {
     ps: {
       run: () => run,
-      /** The cave's light menu (F4 too): sliders for every number of the light, and a room lab (`ui/lightMenu.ts`). */
-      light: () => toggleLightMenu(() => run?.game),
+      /** The debug menu (F4 too): a tab each for the cave's light, the cave, the spawns, the maze, the world, the player and the game (`ui/debugMenu.ts`). */
+      debug: () => toggleDebugMenu(() => run?.game),
+      light: () => toggleDebugMenu(() => run?.game),
       startRun,
       // Sheets loaded (their decoded MB now and at peak; `true` starts a new peak) and frame silhouettes cached right now (`render/sprites.ts`).
       sprites: (resetPeak = false) => ({ ...spriteMemory(resetPeak), overlays: overlayStats() }),

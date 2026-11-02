@@ -1,6 +1,7 @@
 import { weightedPick } from '../engine/rng'
 import type { Ellipse } from '../data/terrain'
 import { PLACE, PLACES, type PlaceId } from '../data/places'
+import { DEBUG_TUNE } from './debugTune'
 import { runMods } from './legend'
 import { spawnEnemy } from './enemies'
 import { placePool, type PlaceInterior, type PlaceNotice } from './place'
@@ -44,13 +45,13 @@ const crowd = (g: Game) => {
 export const spawnInPlace = (g: Game, inside: PlaceInterior, dt: number, spotFor: (g: Game) => { x: number; y: number } | null, rate = 1, onSpawn?: (e: Enemy) => void) => {
   const def = PLACES[inside.id].spawn
   const more = runMods(g).spawnRate
-  inside.spawnBudget += def.rate * rate * more * dt
+  inside.spawnBudget += def.rate * rate * more * DEBUG_TUNE.place * dt
   if (inside.spawnBudget < 1) return
   let alive = crowd(g)
   const pool = placePool(inside.id, g.time)
   while (inside.spawnBudget >= 1) {
     inside.spawnBudget--
-    if (alive >= def.max * more) continue
+    if (alive >= def.max * more * DEBUG_TUNE.placeCap) continue
     const spot = spotFor(g)
     if (!spot) continue
     const e = spawnEnemy(g, weightedPick(g.rng, pool), spot.x, spot.y)

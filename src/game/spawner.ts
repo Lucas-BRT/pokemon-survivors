@@ -14,6 +14,7 @@ import { makeShiny, rollShiny, SHINY_ODDS } from './shiny'
 import { surgeSize, TENSION_PEAK, tensionMods } from './tension'
 import { spawnPoint, updateTension } from './tensionSystem'
 import { isSpitter, makeSpitter, SPITTERS } from './spitters'
+import { DEBUG_TUNE } from './debugTune'
 import { anchorPlayer, hordeShut, onAnyScreen, playerWithin } from './players'
 import { coopScale } from './coop'
 import { COOP } from '../data/coop'
@@ -190,7 +191,7 @@ export const updateSpawner = (g: Game, dt: number) => {
   const peak = TENSION_PEAK[g.difficulty]
   const tension = tensionMods(level, peak, g.endless !== null)
   // Co-op: a denser horde for a bigger team (`coopScale`; exactly 1 solo).
-  const cap = stage.max * pressure.max * more * tension.cap * coopScale(g, COOP.scale.cap)
+  const cap = stage.max * pressure.max * more * tension.cap * coopScale(g, COOP.scale.cap) * DEBUG_TUNE.cap
   // Tension brings pressure, not power: the faster horde splits the same loot.
   g.tension.share = 1 / tension.rate
   const spitting = spitter !== null && !finale && g.time >= spit.from
@@ -206,7 +207,7 @@ export const updateSpawner = (g: Game, dt: number) => {
   }
 
   if (shut) g.spawnBudget = 0
-  else g.spawnBudget += stage.rate * pressure.rate * more * tension.rate * coopScale(g, COOP.scale.spawn) * dt
+  else g.spawnBudget += stage.rate * pressure.rate * more * tension.rate * coopScale(g, COOP.scale.spawn) * DEBUG_TUNE.world * dt
   while (g.spawnBudget >= 1) {
     g.spawnBudget--
     if (regular >= cap) {

@@ -1,6 +1,7 @@
 import { coopLocked } from '../data/coop'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import type { EnemyId } from '../data/enemies'
+import { DEBUG_TUNE } from './debugTune'
 import { mazeTheme, MAZE_RUN, MAZE_THEME_IDS } from '../data/mazeEvents'
 import { createRng, weightedPick } from '../engine/rng'
 import { dropItem } from './consumables'
@@ -231,13 +232,13 @@ const trackEntries = (g: Game) => {
  */
 const stepLive = (g: Game, site: MazeSite, run: MazeRun, dt: number) => {
   const inside = g.players.filter((p) => standing(g, p) && inBox(site, p.x, p.y))
-  if (inside.length === 0) return
+  if (inside.length === 0 || DEBUG_TUNE.maze <= 0) return
   run.spawnIn -= dt
   if (run.spawnIn > 0) return
-  run.spawnIn = MAZE_RUN.live.every
+  run.spawnIn = MAZE_RUN.live.every / Math.max(0.05, DEBUG_TUNE.maze)
   let alive = 0
   for (const e of g.enemies) if (e.home === site.key && e.dying < 0 && e.id !== run.guard) alive++
-  const cap = Math.min(MAZE_RUN.live.max, MAZE_RUN.live.base + Math.floor(g.time / 60 / MAZE_RUN.live.perMinutes))
+  const cap = Math.min(MAZE_RUN.live.max, MAZE_RUN.live.base + Math.floor(g.time / 60 / MAZE_RUN.live.perMinutes)) * DEBUG_TUNE.maze
   if (alive >= cap) return
   const rng = createRng(dm.round(site.seed + 977 + run.spawned * 31))
   run.spawned++
