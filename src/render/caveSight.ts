@@ -1,7 +1,7 @@
 import { CAVE } from '../data/places'
 import { caveLight } from '../game/cave'
 import { levelOf, levelsOf } from '../game/caveLevel'
-import { spaceAt, type DungeonFloor, type Rect } from '../game/dungeon'
+import { roomAt, spaceAt, type DungeonFloor, type Rect } from '../game/dungeon'
 import type { Game } from '../game/types'
 
 /**
@@ -93,7 +93,7 @@ export type Lit = { -readonly [K in keyof typeof CAVE.lit]: number } & {
   auraWaver: number
   auraBlink: number
   auraFoot: number
-  /** A crystal that doesn't shine (0 off, 1 on): the dull glint's radius (px), its strength, the distance (px) a player can be and still see it at full, and how far past that it fades out. */
+  /** A crystal that doesn't shine (0 off, 1 on): the dull glint's radius (px), its strength, how far (px) past its room's walls a player can be and still see it at full (inside the room it never fades; in a corridor the distance is to the crystal), and how far past that it fades out. */
   glint: number
   glintR: number
   glintGain: number
@@ -122,4 +122,22 @@ export const roomLevels = (plan: DungeonFloor, touched: readonly number[]): read
   const levels = levelsOf(plan, touched, lit, lit.allOn === 1)
   levelsCache.set(plan, { key, levels })
   return levels
+}
+
+/**
+ * How strongly a crystal that isn't shining glints (0..1, before `glintGain`): constant while a player is in its room, wherever in it
+ * they stand, and fading only once they are out of it, by their distance to its walls (`glintNear` px of grace, then `glintFade` px
+ * to nothing). A crystal in a corridor has no room: the distance is to the crystal itself. In the treasure chamber (`plan` null) the
+ * whole cavern is one room. `players` and the crystal (`at`) are in the floor's own px.
+ */
+export const glintOf = (plan: DungeonFloor | null, at: readonly [number, number], players: ReadonlyArray<{ x: number; y: number }>, n: Pick<Lit, 'glintNear' | 'glintFade'> = lit) => {
+  const room = plan ? roomAt(plan, at[0], at[1]) : -1
+  const walls = room >= 0 ? plan!.rooms[room]! : null
+  let nearest = Infinity
+  for (const q of players) {
+    const d = !plan ? 0 : walls ? Math.hypot(Math.max(walls.x - q.x, 0, q.x - (walls.x + walls.w)), Math.max(walls.y - q.y, 0, q.y - (walls.y + walls.h))) : Math.hypot(q.x - at[0], q.y - at[1])
+    nearest = Math.min(nearest, d)
+  }
+  const k = Math.max(0, Math.min(1, (nearest - n.glintNear) / Math.max(1, n.glintFade)))
+  return 1 - k * k * (3 - 2 * k)
 }

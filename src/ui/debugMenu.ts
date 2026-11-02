@@ -107,8 +107,8 @@ const LIGHT: ReadonlyArray<{ group: string; controls: readonly LightControl[]; e
       { key: 'glint', label: 'Glint on (0/1)', min: 0, max: 1, step: 1 },
       { key: 'glintGain', label: 'Glint strength', min: 0, max: 1, step: 0.05 },
       { key: 'glintR', label: 'Glint radius (px)', min: 2, max: 40, step: 1 },
-      { key: 'glintNear', label: 'Distance of full glint (px)', min: 0, max: 300, step: 5 },
-      { key: 'glintFade', label: 'Fade-out distance (px)', min: 5, max: 300, step: 5 },
+      { key: 'glintNear', label: 'Full glint within this far of the room (px)', min: 0, max: 300, step: 5 },
+      { key: 'glintFade', label: 'Fade-out distance past it (px)', min: 5, max: 300, step: 5 },
     ],
   },
   {

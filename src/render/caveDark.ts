@@ -4,7 +4,7 @@ import { floorShapes, roomAt, type DungeonFloor } from '../game/dungeon'
 import { CAVE } from '../data/places'
 import type { PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
-import { lit, roomLevel, roomLevels } from './caveSight'
+import { glintOf, lit, roomLevel, roomLevels } from './caveSight'
 
 /**
  * The cave's dark as one scalar field, drawn in a single pass. Every light is a
@@ -138,6 +138,8 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
     points.push({ x: p.x, y: p.y - 10, r: (reach + flicker) * lit.playerScale, i: 1 })
     litBy.push([p.x, p.y - 10, reach * 0.8])
   }
+  // The players in the floor's own px (the crystals' glint is judged by where they are).
+  const team = g.players.filter((q) => !q.gone).map((q) => ({ x: q.x - inside.x, y: q.y - inside.y }))
   s.lights.forEach(([lx, ly], i) => {
     const x = inside.x + lx
     const y = inside.y + ly - 6
@@ -152,9 +154,8 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
       return
     }
     if (!lit.glint) return
-    let nearest = Infinity
-    for (const q of g.players) if (!q.gone) nearest = Math.min(nearest, Math.hypot(q.x - x, q.y - y))
-    const glint = lit.glintGain * (1 - smooth((nearest - lit.glintNear) / Math.max(1, lit.glintFade)))
+    // A dull crystal glints the same all over its room and fades only once the players are out of it (`glintOf`).
+    const glint = lit.glintGain * glintOf(plan, [lx, ly], team)
     if (glint > 0.02) points.push({ x, y, r: lit.glintR, i: glint })
   })
   if (s.stairs && glows(inside.x + s.stairs[0], inside.y + s.stairs[1])) points.push({ x: inside.x + s.stairs[0], y: inside.y + s.stairs[1], r: 24 + Math.sin(t * 3) * 2, i: 1 })
