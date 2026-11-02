@@ -133,6 +133,36 @@ const collect = (): Leaf[] => {
   return (leaves = out)
 }
 
+/** The fields for code (the MCP bridge): each one's id, value, first value and when a change takes effect. */
+export const dataApi = {
+  search: (query: string, limit = 60) => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+    const found = collect().filter((l) => words.every((w) => `${l.table}.${l.path}`.toLowerCase().includes(w)))
+    return { total: found.length, fields: found.slice(0, limit).map((l) => describe(l)) }
+  },
+  get: (id: string) => {
+    const l = collect().find((x) => `${x.table}.${x.path}` === id)
+    return l ? describe(l) : null
+  },
+  set: (id: string, value: number | boolean) => {
+    const l = collect().find((x) => `${x.table}.${x.path}` === id)
+    if (!l || typeof value !== typeof l.first) return null
+    l.write(value)
+    return describe(l)
+  },
+  reset: (id: string) => {
+    const l = collect().find((x) => `${x.table}.${x.path}` === id)
+    if (!l) return null
+    l.write(l.first)
+    return describe(l)
+  },
+}
+
+const describe = (l: Leaf) => {
+  const when = whenOf(l)
+  return { id: `${l.table}.${l.path}`, value: l.read(), first: l.first, when: when ? `${TAGS[when].label}: ${TAGS[when].note}` : 'not audited' }
+}
+
 const stepOf = (v: number) => (Math.abs(v) >= 100 ? 1 : Math.abs(v) >= 10 ? 0.5 : Math.abs(v) >= 1 ? 0.05 : 0.005)
 
 /** Puts text on the clipboard (the browser may refuse without a click or permission: then it's in the console only). */

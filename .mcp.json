@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pokemon-game": {
+      "command": "node",
+      "args": ["scripts/mcp/game-mcp.mjs"]
+    }
+  }
+}

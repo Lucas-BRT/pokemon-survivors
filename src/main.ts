@@ -4217,6 +4217,8 @@ if (import.meta.env.DEV) {
     }
   })
   window.setInterval(() => keepDebugHolds(run?.game), 50)
+  // The MCP server (`scripts/mcp/game-mcp.mjs`) lets an AI agent drive this page; without it the bridge just waits.
+  void import('./devBridge').then((m) => m.startDevBridge({ game: () => run?.game, run: () => run }))
   const withRun = (fn: (g: Game) => void) => (run ? fn(run.game) : console.warn('ps: start a run first'))
   Object.assign(window, {
     ps: {

@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_CLERK_PUBLISHABLE_KEY?: string
   /** Base URL of the accounts API (`server/`), e.g. `https://api.pokemonsurvivors.com`. */
   readonly VITE_API_URL?: string
+  /** Dev only: the port of the MCP server's bridge (`scripts/mcp/game-mcp.mjs`, 8799 by default). */
+  readonly VITE_MCP_PORT?: string
   /** PostHog's project key (`phc_…`, public): analytics and error reports (`src/analytics.ts`). Without it, neither. */
   readonly VITE_POSTHOG_KEY?: string
   /** The co-op relay (`relay/`), e.g. `https://ps-coop.pedrobarretto.workers.dev`. Dev builds default to the dev relay. */
