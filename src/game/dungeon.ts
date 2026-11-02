@@ -187,7 +187,8 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
 /**
  * A bigger, less regular floor (`CAVE_GEN`): rooms on a larger grid with a
  * share of its cells left empty (never splitting the rest), a spanning tree
- * plus a few extra corridors to choose routes from, the stairs in the room the
+ * (one way between any two rooms, so one way to the stairs; `CAVE_GEN.loops`
+ * can add extra corridors back), the stairs in the room the
  * most corridors away, and some rooms set aside as ambushes with a prize each.
  * Pure: the same rng gives the same floor. Same shape as `generateFloor`, so
  * the walkers' steering (`dungeonNav`) and the art work as they are.
@@ -264,7 +265,7 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
     stack.push(next)
   }
   const extra = rooms.flatMap((_, i) => neighbors(i).filter((n) => n > i && !linked(i, n)).map((n) => [i, n] as const))
-  const loops = Math.min(extra.length, Math.max(1, dm.round(extra.length * CAVE_GEN.loops)))
+  const loops = Math.min(extra.length, dm.round(extra.length * CAVE_GEN.loops))
   for (let n = 0; n < loops; n++) {
     const [a, b] = extra.splice(Math.floor(rng() * extra.length), 1)[0]!
     join(a, b)

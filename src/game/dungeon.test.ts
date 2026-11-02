@@ -87,18 +87,30 @@ describe('generateFloorV2', () => {
         expect(dist[f.stairsRoom]).toBe(Math.max(...dist))
         expect(f.rooms.length).toBeLessThan(grid.cols * grid.rows)
         expect(f.rooms.length).toBeGreaterThanOrEqual(Math.floor(grid.cols * grid.rows * (1 - CAVE_GEN.drop[index]!)))
-        // A spanning tree has one corridor fewer than rooms; the rest are loops (a floor left with no spare neighbors has none).
-        expect(f.links.length).toBeGreaterThanOrEqual(f.rooms.length - 1)
+        // A tree: one corridor fewer than rooms, so one way between any two rooms (loops only if `CAVE_GEN.loops` asks).
+        if (CAVE_GEN.loops === 0) expect(f.links.length).toBe(f.rooms.length - 1)
+        else expect(f.links.length).toBeGreaterThanOrEqual(f.rooms.length - 1)
         expect(roomAt(f, ...f.stairs)).toBe(f.stairsRoom)
         expect(roomAt(f, ...f.start)).toBe(f.startRoom)
       }
     }
   })
 
-  it('gives nearly every floor loops, so there is a route to choose', () => {
+  it.skipIf(CAVE_GEN.loops !== 0)('has one way to the stairs: every room but the start is reached through one corridor from the room before it, and no room is joined twice', () => {
     for (const index of [0, 1, 2]) {
-      const fs = floors2(index)
-      expect(fs.filter((f) => f.links.length > f.rooms.length - 1).length).toBeGreaterThan(fs.length * 0.9)
+      for (const f of floors2(index)) {
+        const dist = roomDistances(f, [f.startRoom])
+        // Each room has exactly one neighbor one step nearer to the start (a loop would give a second way in).
+        f.rooms.forEach((_, room) => {
+          if (room === f.startRoom) return
+          const nearer = f.links.filter((l) => (l.a === room && dist[l.b] === dist[room]! - 1) || (l.b === room && dist[l.a] === dist[room]! - 1))
+          expect(nearer).toHaveLength(1)
+          // And none of its other corridors leads to a room as near as it.
+          for (const l of f.links.filter((l) => l.a === room || l.b === room)) expect(dist[l.a === room ? l.b : l.a]).not.toBe(dist[room])
+        })
+        const pairs = f.links.map((l) => `${l.a}-${l.b}`)
+        expect(new Set(pairs).size).toBe(pairs.length)
+      }
     }
   })
 

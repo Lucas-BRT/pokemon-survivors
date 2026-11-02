@@ -174,6 +174,7 @@ Pendente da Fase 1: colocar o gerador dentro do jogo (semente por monumento, art
 | Gerado B3F (5×4) | 15,0 | 1,2 | 7,2 | 183 | 901 × 597 | 2 | 5 |
 
 - **Três andares com escada** mais a câmara do baú (antes eram dois).
+- **Um só caminho até a escada** (decisão de 2026-11-01): `CAVE_GEN.loops = 0` deixa cada andar uma árvore de salas, com um único caminho entre quaisquer duas e, portanto, até a escada. Os ramos laterais são becos que guardam as salas de emboscada e os prêmios. A coluna "Laços" da tabela abaixo é de antes dessa decisão (≈ 1,2 por andar); agora é 0. Subir `loops` traz as rotas alternativas de volta.
 - **Relógio por andar** (`CAVE_GEN.floorTime` 75, 90 e 105 s; câmara 60 s), com o vento recomeçando em cada andar (30, 15 e 6 s). Confirmado na tela: "B2F · wind 01:30".
 - **Emboscada:** o primeiro jogador que pisa numa sala marcada solta uma matilha (4 + 2 por andar) ao redor da sala e deixa um prêmio (₽ e um item) a quem aguentar. O spawn escuro também cresce 20% por andar.
 - O evento da emboscada reaproveita o `monsterHouse`, então o aviso na tela ainda é o texto do Monster House.

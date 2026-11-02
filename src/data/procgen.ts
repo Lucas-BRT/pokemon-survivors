@@ -27,8 +27,12 @@ export const CAVE_GEN = {
   grids: [{ cols: 4, rows: 3 }, { cols: 4, rows: 4 }, { cols: 5, rows: 4 }],
   /** Share of a floor's cells left without a room (never one that would split the rest), so floors are not plain rectangles. */
   drop: [0.15, 0.2, 0.25],
-  /** Corridors added on top of the spanning tree, as a share of those that could be (at least one): routes to choose from. */
-  loops: 0.3,
+  /**
+   * Corridors added on top of the spanning tree, as a share of those that could be.
+   * 0 keeps every floor a tree: one way between any two rooms, so one way to the stairs
+   * (side branches are dead ends that hold prizes). Raise it for loops and routes to choose.
+   */
+  loops: 0,
   /** Ambush rooms per floor: a prize lies in each, and the first step in springs the dark's pack. */
   ambush: [1, 2, 2],
   /** Items lying around each floor, besides the ambush prizes. */
