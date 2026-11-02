@@ -54,22 +54,51 @@ const NEED_CAVE = 'Entre na caverna primeiro.'
 
 /* ---------------- Tabs ---------------- */
 
-const LIGHT: ReadonlyArray<{ key: keyof Lit; label: string; min: number; max: number; step: number }> = [
-  { key: 'black', label: 'Escuridão (alpha do preto)', min: 0.5, max: 1, step: 0.005 },
-  { key: 'floor', label: 'L0: piso da sala visitada', min: 0, max: 0.6, step: 0.01 },
-  { key: 'max', label: 'Teto de luz de uma sala (L máx)', min: 0.1, max: 1, step: 0.05 },
-  { key: 'e0', label: 'E0: energia p/ 63% (sala média)', min: 0.1, max: 3, step: 0.05 },
-  { key: 'gamma', label: 'γ: diluição por tamanho', min: 0, max: 1.5, step: 0.05 },
-  { key: 'aref', label: 'Área de referência (px²)', min: 4000, max: 30000, step: 500 },
-  { key: 'door', label: 'Peso do cristal de porta', min: 0, max: 1, step: 0.05 },
-  { key: 'reach', label: 'Alcance do cristal de porta (px)', min: 20, max: 240, step: 4 },
-  { key: 'spill', label: 'Alcance da luz que sai da porta (px)', min: 0, max: 160, step: 4 },
-  { key: 'allOn', label: 'Todos os cristais ativos (0/1, lab)', min: 0, max: 1, step: 1 },
-  { key: 'rim', label: 'Luz na borda da rocha (px)', min: 0, max: 24, step: 1 },
-  { key: 'fade', label: 'Velocidade da transição (1/s)', min: 0.5, max: 12, step: 0.5 },
-  { key: 'auraGain', label: 'Força da aura do cristal', min: 0, max: 1, step: 0.05 },
-  { key: 'aura', label: 'Aura do cristal (px)', min: 10, max: 90, step: 2 },
-  { key: 'playerScale', label: 'Luz do jogador (escala)', min: 0.2, max: 2, step: 0.05 },
+type LightControl = { key: keyof Lit; label: string; min: number; max: number; step: number }
+
+/** The cave's light numbers by what they act on: each group is a collapsible section of the tab. */
+const LIGHT: ReadonlyArray<{ group: string; controls: readonly LightControl[] }> = [
+  {
+    group: 'Escuridão geral',
+    controls: [
+      { key: 'black', label: 'Escuridão (alpha do preto)', min: 0.5, max: 1, step: 0.005 },
+      { key: 'fade', label: 'Velocidade da transição (1/s)', min: 0.5, max: 12, step: 0.5 },
+    ],
+  },
+  {
+    group: 'Jogador',
+    controls: [{ key: 'playerScale', label: 'Luz do jogador (escala)', min: 0.2, max: 2, step: 0.05 }],
+  },
+  {
+    group: 'Salas',
+    controls: [
+      { key: 'floor', label: 'L0: piso da sala visitada', min: 0, max: 0.6, step: 0.01 },
+      { key: 'max', label: 'Teto de luz de uma sala (L máx)', min: 0.1, max: 1, step: 0.05 },
+      { key: 'e0', label: 'E0: energia p/ 63% (sala média)', min: 0.1, max: 3, step: 0.05 },
+      { key: 'gamma', label: 'γ: diluição por tamanho', min: 0, max: 1.5, step: 0.05 },
+      { key: 'aref', label: 'Área de referência (px²)', min: 4000, max: 30000, step: 500 },
+    ],
+  },
+  {
+    group: 'Fontes de luz (cristais)',
+    controls: [
+      { key: 'allOn', label: 'Todos os cristais ativos (0/1, lab)', min: 0, max: 1, step: 1 },
+      { key: 'auraGain', label: 'Força da aura do cristal', min: 0, max: 1, step: 0.05 },
+      { key: 'aura', label: 'Aura do cristal (px)', min: 10, max: 90, step: 2 },
+    ],
+  },
+  {
+    group: 'Portas e corredores',
+    controls: [
+      { key: 'door', label: 'Peso do cristal de porta', min: 0, max: 1, step: 0.05 },
+      { key: 'reach', label: 'Alcance do cristal de porta (px)', min: 20, max: 240, step: 4 },
+      { key: 'spill', label: 'Alcance da luz que sai da porta (px)', min: 0, max: 160, step: 4 },
+    ],
+  },
+  {
+    group: 'Paredes',
+    controls: [{ key: 'rim', label: 'Luz na borda da rocha (px)', min: 0, max: 24, step: 1 }],
+  },
 ]
 
 const lab: Lab = { size: 4, inside: 1, doors: 0, vertical: 0 }
@@ -79,7 +108,10 @@ const lightTab: Tab = {
   label: 'Luz',
   controls: (g) => [
     { t: 'info', text: () => `L de uma sala média com 1 cristal: ${roomLevel(1, lit.aref).toFixed(2)} · com 0: ${roomLevel(0, lit.aref).toFixed(2)}` },
-    ...LIGHT.map((c): Ctl => ({ t: 'slider', label: c.label, min: c.min, max: c.max, step: c.step, get: () => lit[c.key], set: (n) => { lit[c.key] = n; retune() } })),
+    ...LIGHT.flatMap((grp): Ctl[] => [
+      { t: 'title', label: grp.group },
+      ...grp.controls.map((c): Ctl => ({ t: 'slider', label: c.label, min: c.min, max: c.max, step: c.step, get: () => lit[c.key], set: (n) => { lit[c.key] = n; retune() } })),
+    ]),
     { t: 'title', label: 'Sala do laboratório' },
     { t: 'slider', label: 'Tamanho (x sala média)', min: 0.5, max: 12, step: 0.5, get: () => lab.size, set: (n) => (lab.size = n) },
     { t: 'slider', label: 'Cristais dentro', min: 0, max: 12, step: 1, get: () => lab.inside, set: (n) => (lab.inside = n) },
@@ -363,20 +395,30 @@ let tick: number | undefined
 let current = 'cave'
 
 const STYLE =
-  '#debug-menu .dm-tabs{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px}#debug-menu .dm-tabs button{flex:1;padding:3px 4px;cursor:pointer;background:#223;color:#fff;border:1px solid #446}#debug-menu .dm-tabs button.on{background:#58a8d8;color:#001}#debug-menu .dm-row{display:grid;grid-template-columns:1fr auto;gap:0 6px;margin:3px 0}#debug-menu .dm-row input[type=range]{grid-column:1/3;width:100%}#debug-menu .dm-line{display:flex;justify-content:space-between;gap:6px;margin:3px 0}#debug-menu .dm-line select{max-width:150px}#debug-menu .dm-btns{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}#debug-menu .dm-btns button{flex:1;padding:3px 6px;cursor:pointer}#debug-menu .dm-title{margin:8px 0 3px;font-weight:bold;color:#9cf}#debug-menu .dm-info{margin:4px 0;color:#9fd;white-space:pre-wrap}#debug-menu .dm-status{margin-top:6px;color:#fd9}'
+  '#debug-menu .dm-tabs{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px}#debug-menu .dm-tabs button{flex:1;padding:3px 4px;cursor:pointer;background:#223;color:#fff;border:1px solid #446}#debug-menu .dm-tabs button.on{background:#58a8d8;color:#001}#debug-menu .dm-row{display:grid;grid-template-columns:1fr auto;gap:0 6px;margin:3px 0}#debug-menu .dm-row input[type=range]{grid-column:1/3;width:100%}#debug-menu .dm-line{display:flex;justify-content:space-between;gap:6px;margin:3px 0}#debug-menu .dm-line select{max-width:150px}#debug-menu .dm-btns{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}#debug-menu .dm-btns button{flex:1;padding:3px 6px;cursor:pointer}#debug-menu .dm-group{margin:6px 0;border-top:1px solid #335}#debug-menu .dm-title{margin:4px 0;font-weight:bold;color:#9cf;cursor:pointer;list-style:none}#debug-menu .dm-title::before{content:"▾ "}#debug-menu details:not([open])>.dm-title::before{content:"▸ "}#debug-menu .dm-info{margin:4px 0;color:#9fd;white-space:pre-wrap}#debug-menu .dm-status{margin-top:6px;color:#fd9}'
 
-/** Redraws a tab's controls into `body`; `say` shows a line at the bottom. */
+/** Which groups are folded, by tab and title: kept while the menu lives, so a tab comes back as it was left. */
+const folded = new Set<string>()
+
+/** Redraws a tab's controls into `body`; each title opens a collapsible group holding the controls up to the next title. `say` shows a line at the bottom. */
 const draw = (body: HTMLElement, tab: Tab, g: Game | undefined, say: (text: string) => void) => {
   body.replaceChildren()
+  let into: HTMLElement = body
   for (const c of tab.controls(g)) {
     switch (c.t) {
-      case 'title':
-        body.append(h('div', { class: 'dm-title' }, c.label))
+      case 'title': {
+        const key = `${tab.id}:${c.label}`
+        const box = h('details', { class: 'dm-group' }, h('summary', { class: 'dm-title' }, c.label)) as HTMLDetailsElement
+        box.open = !folded.has(key)
+        box.addEventListener('toggle', () => (box.open ? folded.delete(key) : folded.add(key)))
+        body.append(box)
+        into = box
         break
+      }
       case 'info': {
         const el = h('div', { class: 'dm-info' }, c.text())
         infos.push(() => (el.textContent = c.text()))
-        body.append(el)
+        into.append(el)
         break
       }
       case 'slider': {
@@ -386,25 +428,25 @@ const draw = (body: HTMLElement, tab: Tab, g: Game | undefined, say: (text: stri
           c.set(Number(input.value))
           value.textContent = input.value
         })
-        body.append(h('label', { class: 'dm-row' }, h('span', {}, c.label), value, input))
+        into.append(h('label', { class: 'dm-row' }, h('span', {}, c.label), value, input))
         break
       }
       case 'toggle': {
         const input = h('input', { type: 'checkbox' }) as HTMLInputElement
         input.checked = c.get()
         input.addEventListener('change', () => c.set(input.checked))
-        body.append(h('label', { class: 'dm-line' }, h('span', {}, c.label), input))
+        into.append(h('label', { class: 'dm-line' }, h('span', {}, c.label), input))
         break
       }
       case 'select': {
         const input = h('select', {}, ...c.options.map((o) => h('option', { value: o }, o))) as HTMLSelectElement
         input.value = c.get()
         input.addEventListener('change', () => c.set(input.value))
-        body.append(h('label', { class: 'dm-line' }, h('span', {}, c.label), input))
+        into.append(h('label', { class: 'dm-line' }, h('span', {}, c.label), input))
         break
       }
       case 'buttons':
-        body.append(
+        into.append(
           h(
             'div',
             { class: 'dm-btns' },
