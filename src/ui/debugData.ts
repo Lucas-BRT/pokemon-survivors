@@ -16,10 +16,10 @@ import { TENSION, TENSION_PEAK } from '../game/tension'
 import { h } from './dom'
 
 /**
- * The debug menu's "Dados" tab: every number and flag of the game's data tables as a field to edit while the run plays. The tables are
- * plain objects (`as const` is only a type), so a change takes effect wherever the game reads the value when it uses it (not the ones
- * it works out once when the page loads, like a place's clock from the floors' clocks); generating a floor, a maze or a room uses it from
- * the next one. Each field remembers its first value for "↺", and "Copiar alterações" prints what changed to paste into the data files.
+ * The debug menu's "Data" tab: every number and flag of the game's data tables as a field to edit while the run plays. The tables are
+ * plain objects (`as const` is only a type), so a change takes effect wherever the game reads the value when it uses it, which is
+ * not always now: each field wears a tag saying when (`WHEN`), because many are read once, when a floor, a maze or a run is made, or
+ * were copied when the page loaded. Each field remembers its first value for "↺", and "Copy changes" prints what changed.
  */
 
 const TABLES: Record<string, object> = {
@@ -51,6 +51,67 @@ const TABLES: Record<string, object> = {
   LANDMARK,
 }
 
+/** When a change takes effect, as audited from the code that reads the field. */
+type When = 'live' | 'floor' | 'later' | 'maze' | 'rebuild' | 'run' | 'cached' | 'captured' | 'diff' | 'split' | 'test' | 'unused'
+
+const TAGS: Record<When, { label: string; color: string; note: string }> = {
+  live: { label: 'live', color: '#70e070', note: 'read every time it is used: takes effect now' },
+  floor: { label: 'floor', color: '#e0d060', note: 'read when a cave floor is generated: Cave tab → Regenerate floor' },
+  later: { label: 'later', color: '#e0d060', note: 'read at a later moment (the next entrance scheduled, the next guardian woken…)' },
+  maze: { label: 'maze', color: '#e0d060', note: 'read when a maze is generated (they are cached per world): Maze tab → New world' },
+  rebuild: { label: 'rebuild', color: '#e0d060', note: 'read when a maze’s contents are built: Maze tab → Rebuild contents' },
+  run: { label: 'run', color: '#e0a060', note: 'read when a run starts: restart the run' },
+  cached: { label: 'cached', color: '#e0a060', note: 'only terrain not generated yet (the cells already seen are cached)' },
+  captured: { label: 'captured', color: '#e07070', note: 'copied once when the page loaded: changing it does nothing (or breaks things) until a reload' },
+  diff: { label: 'row', color: '#e0d060', note: 'one row per difficulty (or level): only the one in play matters' },
+  split: { label: 'sim', color: '#e0d060', note: 'only the simulation reads this copy; what is drawn uses the Light tab’s' },
+  test: { label: 'tests', color: '#e07070', note: 'only the tests read it: changing it changes nothing in the game' },
+  unused: { label: 'unused', color: '#e07070', note: 'nothing reads it' },
+}
+
+/** The first rule that matches `TABLE.path` says when the field takes effect; fields no rule matches have not been audited. */
+const WHEN: ReadonlyArray<readonly [RegExp, When]> = [
+  [/^CAVE_SHOP\.crystals$/, 'test'],
+  [/^CAVE\.floors$/, 'unused'],
+  [/^CAVE\.lit\./, 'split'],
+  [/^CAVE\.card$/, 'floor'],
+  [/^CAVE\.(light|fireLight|electricLight|stairsRadius|wind|monsterHouse|chestRadius|chestTime|sight|crystal|phase)/, 'live'],
+  [/^CAVE_SHOP\.(chance|shinyChance|shinyFrom|gemsPerPrize)$/, 'floor'],
+  [/^CAVE_SHOP\./, 'live'],
+  [/^CAVE_GEN\.(floorTime|chamberTime)/, 'floor'],
+  [/^CAVE_GEN\.(wind|spawn|spawnPerFloor|packMax|packs)/, 'live'],
+  [/^CAVE_GEN\./, 'floor'],
+  // A cave's level row: laid out when a floor is made, the rest read as it plays; only the row of the cave's own level matters.
+  [/^CAVE_LEVELS\.\[\d\]\.(floors|grid|big|ambush|items|crystals|traps|reward\.(coins|gems|items|shiny))$/, 'floor'],
+  [/^CAVE_LEVELS\./, 'diff'],
+  [/^PLACE\.firstAt$/, 'run'],
+  [/^PLACE\.(every|jitter|openTime|bossWait)$/, 'later'],
+  [/^PLACE\./, 'live'],
+  [/^GRAND\.(cell|wall)$/, 'captured'],
+  [/^GRAND\.(sight|reach)$/, 'live'],
+  [/^GRAND\./, 'maze'],
+  [/^MAZE_RUN\.(lockOdds|keys|decoyOdds|caches|ringPairs|hidden)/, 'rebuild'],
+  [/^MAZE_RUN\.rare/, 'later'],
+  [/^MAZE_RUN\./, 'live'],
+  [/^SPITTERS\.\w+\.from$/, 'captured'],
+  [/^(DIFFICULTIES|SPITTERS|TENSION_PEAK|HAZARD_PACE)\.\w+\./, 'diff'],
+  [/^RUNNER\.(from|weight)$/, 'run'],
+  [/^(RUNNER|ELITE)\./, 'live'],
+  [/^STAGES\.\[\d+\]\.(rate|max)$/, 'live'],
+  [/^STAGES\./, 'run'],
+  [/^WORLD_PATTERNS\.\w+\.weight$/, 'captured'],
+  [/^WORLD_PATTERNS\./, 'live'],
+  [/^TERRAIN\.(weights|scatter\.weights|bushVariants|rockVariants|treeVariants)/, 'captured'],
+  [/^TERRAIN\./, 'cached'],
+  [/^LANDMARK\.(treasureRadius|openTime)$/, 'live'],
+  [/^LANDMARK\./, 'cached'],
+]
+
+const whenOf = (l: { table: string; path: string }): When | null => {
+  const id = `${l.table}.${l.path}`
+  return WHEN.find(([re]) => re.test(id))?.[1] ?? null
+}
+
 type Leaf = { table: string; path: string; read: () => number | boolean; write: (v: number | boolean) => void; first: number | boolean }
 
 let leaves: Leaf[] | null = null
@@ -80,23 +141,25 @@ export const copyText = (text: string): void => {
 }
 
 let filter = ''
+let onlyNow = false
 
 /** Draws the tab's fields into `into`; `say` shows a line at the menu's bottom. */
 export const renderData = (into: HTMLElement, say: (text: string) => void) => {
   const all = collect()
-  const search = h('input', { type: 'search', placeholder: 'buscar (ex.: CAVE_GEN.packs, glint, spawn)', value: filter, style: 'width:100%;margin:4px 0' }) as HTMLInputElement
+  const search = h('input', { type: 'search', placeholder: 'search (e.g. CAVE_GEN.packs, glint, spawn)', value: filter, style: 'width:100%;margin:4px 0' }) as HTMLInputElement
   const list = h('div', {})
   const changed = () => all.filter((l) => l.read() !== l.first)
   const draw = () => {
     list.replaceChildren()
     const words = filter.toLowerCase().split(/\s+/).filter(Boolean)
-    const rows = all.filter((l) => words.every((w) => `${l.table}.${l.path}`.toLowerCase().includes(w)))
+    const shown = all.filter((l) => !onlyNow || whenOf(l) === 'live')
+    const rows = shown.filter((l) => words.every((w) => `${l.table}.${l.path}`.toLowerCase().includes(w)))
     if (words.length === 0) {
-      list.append(h('div', { class: 'dm-info' }, `${all.length} campos em ${Object.keys(TABLES).length} tabelas. Busque pelo nome, ou abra um grupo.`))
+      list.append(h('div', { class: 'dm-info' }, `${shown.length} fields in ${Object.keys(TABLES).length} tables. Search by name, or open a group.`))
       const counts = new Map<string, Leaf[]>()
-      for (const l of all) counts.set(l.table, [...(counts.get(l.table) ?? []), l])
+      for (const l of shown) counts.set(l.table, [...(counts.get(l.table) ?? []), l])
       for (const [table, ls] of counts) {
-        const box = h('details', { class: 'dm-group' }, h('summary', { class: 'dm-title' }, `${table} (${ls.length}${ls.some((l) => l.read() !== l.first) ? ', alterado' : ''})`)) as HTMLDetailsElement
+        const box = h('details', { class: 'dm-group' }, h('summary', { class: 'dm-title' }, `${table} (${ls.length}${ls.some((l) => l.read() !== l.first) ? ', changed' : ''})`)) as HTMLDetailsElement
         let built = false
         box.addEventListener('toggle', () => {
           if (!box.open || built) return
@@ -107,15 +170,17 @@ export const renderData = (into: HTMLElement, say: (text: string) => void) => {
       }
       return
     }
-    list.append(h('div', { class: 'dm-info' }, `${rows.length} campos${rows.length > 120 ? ' (mostrando 120)' : ''}`))
+    list.append(h('div', { class: 'dm-info' }, `${rows.length} fields${rows.length > 120 ? ' (showing 120)' : ''}`))
     for (const l of rows.slice(0, 120)) list.append(row(l, true))
   }
   const row = (l: Leaf, withTable = false) => {
     const v = l.read()
     const input = h('input', typeof v === 'boolean' ? { type: 'checkbox' } : { type: 'number', step: String(stepOf(Number(v))), value: String(v), style: 'width:84px' }) as HTMLInputElement
     if (typeof v === 'boolean') input.checked = v
-    const reset = h('button', { type: 'button', title: 'restaurar' }, '↺')
-    const name = h('span', { title: `${l.table}.${l.path}`, style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1' }, withTable ? `${l.table}.${l.path}` : l.path)
+    const reset = h('button', { type: 'button', title: 'restore' }, '↺')
+    const when = whenOf(l)
+    const tag = when ? h('b', { title: TAGS[when].note, style: `color:${TAGS[when].color};margin-right:4px;font-weight:normal` }, `[${TAGS[when].label}]`) : h('i', { title: 'not audited: it may or may not take effect now', style: 'color:#888;margin-right:4px' }, '[?]')
+    const name = h('span', { title: `${l.table}.${l.path}${when ? ` — ${TAGS[when].note}` : ''}`, style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1' }, tag, withTable ? `${l.table}.${l.path}` : l.path)
     const paint = () => (name.style.color = l.read() !== l.first ? '#ffd060' : '')
     input.addEventListener('input', () => {
       const n = typeof v === 'boolean' ? input.checked : Number(input.value)
@@ -136,20 +201,33 @@ export const renderData = (into: HTMLElement, say: (text: string) => void) => {
     filter = search.value
     draw()
   })
-  const copy = h('button', { type: 'button' }, 'Copiar alterações')
+  const copy = h('button', { type: 'button' }, 'Copy changes')
   copy.addEventListener('click', () => {
     const diff = Object.fromEntries(changed().map((l) => [`${l.table}.${l.path}`, l.read()]))
     const text = JSON.stringify(diff, null, 2)
     console.log(text)
     copyText(text)
-    say(`${Object.keys(diff).length} alterações copiadas (e no console).`)
+    say(`${Object.keys(diff).length} changes copied (and in the console).`)
   })
-  const undo = h('button', { type: 'button' }, 'Restaurar tudo')
+  const undo = h('button', { type: 'button' }, 'Restore all')
   undo.addEventListener('click', () => {
     for (const l of changed()) l.write(l.first)
     draw()
-    say('Dados restaurados.')
+    say('Data restored.')
   })
-  into.append(search, h('div', { class: 'dm-btns' }, copy, undo), list)
+  const now = h('input', { type: 'checkbox' }) as HTMLInputElement
+  now.checked = onlyNow
+  now.addEventListener('change', () => {
+    onlyNow = now.checked
+    draw()
+  })
+  const legend = h(
+    'div',
+    { class: 'dm-info', style: 'font-size:11px' },
+    ...(Object.keys(TAGS) as When[]).flatMap((k) => [h('b', { title: TAGS[k].note, style: `color:${TAGS[k].color};font-weight:normal` }, `[${TAGS[k].label}]`), ` ${TAGS[k].note}\n`]),
+    h('i', { style: 'color:#888' }, '[?]'),
+    ' not audited',
+  )
+  into.append(search, h('label', { class: 'dm-line' }, h('span', {}, 'Only fields that take effect now'), now), h('div', { class: 'dm-btns' }, copy, undo), list, h('details', { class: 'dm-group' }, h('summary', { class: 'dm-title' }, 'Legend'), legend))
   draw()
 }

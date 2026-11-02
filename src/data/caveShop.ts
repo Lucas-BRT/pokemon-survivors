@@ -54,7 +54,7 @@ export const CAVE_SHOP = {
   radius: 28,
   /** Wares on the table at once. */
   offers: 4,
-  /** Crystals ringing the room, at least. */
+  /** Crystals ringing the room, at least. Only the tests read it: `generateFloorV2` places the room's five itself, so editing this changes nothing. */
   crystals: 5,
   /** Share of the floors that have a Cristalário. */
   chance: 0.6,
