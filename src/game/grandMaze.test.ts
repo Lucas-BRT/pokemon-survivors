@@ -20,9 +20,11 @@ describe('the big hedge maze', () => {
       expect(s.entrances.length).toBeGreaterThanOrEqual(GRAND.entrances[0])
       expect(s.entrances.length).toBeLessThanOrEqual(GRAND.entrances[1])
       expect(s.fromIn.every((d) => Number.isFinite(d))).toBe(true)
-      const mid = (room: { r: number; c: number }) => s.fromIn[(room.r + 1) * s.maze.cols + room.c + 1]!
-      for (const room of s.chambers) expect(mid(s.chambers[s.heart]!)).toBeGreaterThanOrEqual(mid(room))
-      expect(mid(s.chambers[s.heart]!)).toBeGreaterThan(12)
+      // The heart is the open courtyard in the middle, a long walk from every way in.
+      const mid = s.chambers[s.heart]!
+      expect(mid.w).toBe(GRAND.court)
+      expect(s.fromIn[(mid.r + 3) * s.maze.cols + mid.c + 3]!).toBeGreaterThan(12)
+      expect(new Set(s.wings.map((w) => w.kind)).size).toBe(4)
       expect(deadEnds(s.maze).length).toBeGreaterThan(8)
     }
   })

@@ -98,9 +98,9 @@ const runOf = (g: Game, site: MazeSite): MazeRun => {
   const decoyKind = (): EnemyId => (rng() < 0.5 ? 'voltorb' : guess)
   const cache = (p: { x: number; y: number }, forceReal = false): MazeCache => ({ ...p, open: false, t: 0, decoy: !forceReal && rng() < MAZE_RUN.decoyOdds ? decoyKind() : null })
   const heartAt = site.chambers[site.heart]!
-  const heart: MazeCache = { ...at(heartAt.c + 1, heartAt.r + 1), open: false, t: 0, decoy: null }
+  const heart: MazeCache = { ...at(heartAt.c + (heartAt.w >> 1), heartAt.r + (heartAt.h >> 1)), open: false, t: 0, decoy: null }
   // One chest in the middle of every other chamber, and the dead ends' ones.
-  const chamberChests = site.chambers.filter((_, i) => i !== site.heart).map((q) => cache(at(q.c + 1, q.r + 1)))
+  const chamberChests = site.chambers.filter((_, i) => i !== site.heart).map((q) => cache(at(q.c + (q.w >> 1), q.r + (q.h >> 1))))
   const caches = [...chamberChests, ...take(ends, MAZE_RUN.caches).map((p) => cache(p))]
   const traps = take(ends, ends.length).map((p, i): MazeTrap => ({ ...p, kind: i % 2 === 0 ? 'spikes' : 'bomb', ev: -1, fused: false, done: false })).filter((_, i) => i % 3 !== 2)
   // Hidden in corridors (cells with two ways), out of chambers and well in from the ways in.

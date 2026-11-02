@@ -68,16 +68,21 @@ export const GRAND = {
   odds: 0.45,
   footprint: 7,
   clearStart: 1100,
-  /** Growing tree's odds of continuing from the newest cell, share of dead ends given a second way out. */
-  newest: 0.72,
-  braid: 0.3,
-  /** Open chambers (`roomSize`×`roomSize` cells with no hedge inside) and the ways in (drawn between these). */
-  rooms: 7,
+  /** The heart's courtyard: an open square (cells a side) in the middle, ringed by four wings in a pinwheel around it. */
+  court: 7,
+  /** How each kind of wing is carved: `newest` is the growing tree's odds of continuing from the newest cell (1: long winding corridors, 0: many short branches), `braid` the share of dead ends given a second way out, `rooms` the open halls cut in it, `islands` the hedge islands in an open field (the garden). */
+  wings: {
+    avenues: { newest: 0.97, braid: 0.7, rooms: 0, islands: 0 },
+    thicket: { newest: 0.3, braid: 0.1, rooms: 0, islands: 0 },
+    halls: { newest: 0.8, braid: 0.5, rooms: 2, islands: 0 },
+    garden: { newest: 0, braid: 0, rooms: 0, islands: 22 },
+  },
+  /** Side (cells) of a hall, and of the clearing left in the garden. */
   roomSize: 3,
   entrances: [4, 5],
-  /** How far (px) a player sees down a corridor, and the share of it past which the light fades out. */
-  vision: 300,
-  fadeFrom: 0.45,
+  /** How many corridor steps the light of a player reaches, and the share of it each step keeps (a stepped, pixel-dithered fall-off). */
+  reach: 4,
+  falloff: [1, 1, 0.72, 0.42, 0.16],
   /** What a cell the player has seen keeps of the light (0..1): a faint memory. */
   memory: 0.2,
 } as const

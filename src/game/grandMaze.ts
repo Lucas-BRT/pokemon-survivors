@@ -1,7 +1,7 @@
 import { GRAND } from '../data/mazeEvents'
 import { TERRAIN } from '../data/terrain'
 import { createRng, hash2, type Rng } from '../engine/rng'
-import { braid, canStep, distances, growingTree, type Cell, type MazeGrid } from './procgen/maze'
+import { braid, canStep, distances, growingTree, solidMaze, type Cell, type MazeGrid } from './procgen/maze'
 import * as dm from '../engine/dmath'
 
 /**
@@ -16,6 +16,9 @@ export type Side = 0 | 1 | 2 | 3
 /** A chamber: a block of cells without hedges inside. */
 export type Chamber = { c: number; r: number; w: number; h: number }
 
+/** A wing of the pinwheel: its cells and what it is like. */
+export type Wing = { c: number; r: number; w: number; h: number; kind: keyof typeof GRAND.wings }
+
 export type MazeSite = {
   /** The terrain cell key of its footprint's first cell, unique per site. */
   key: number
@@ -29,7 +32,9 @@ export type MazeSite = {
   maze: MazeGrid
   entrances: Array<Cell & { side: Side }>
   chambers: Chamber[]
-  /** The chamber holding the heart's chest. */
+  /** The four wings around the courtyard (north, east, south, west). */
+  wings: Wing[]
+  /** The chamber holding the heart's chest: the courtyard, always the first. */
   heart: number
   /** Steps from the nearest way in to each cell (row-major). */
   fromIn: number[]
@@ -64,22 +69,133 @@ const open = (m: MazeGrid, e: Cell & { side: Side }) => {
   else m.v[e.r]![m.cols] = false
 }
 
-/** Builds the maze of a site from its own seed. */
-const carveSite = (seed: number): Pick<MazeSite, 'maze' | 'entrances' | 'chambers' | 'heart' | 'fromIn'> => {
+type WingKind = Wing['kind']
+
+type Rect = Omit<Wing, 'kind'>
+
+/** Carves one wing into its own grid: a growing tree, or an open field with hedge islands for the garden. */
+const carveWing = (rng: Rng, kind: WingKind, w: number, h: number, chambers: Chamber[]): MazeGrid => {
+  const style = GRAND.wings[kind]
+  const rs = GRAND.roomSize
+  if (kind === 'garden') {
+    const m = solidMaze(w, h)
+    carve(m, { c: 0, r: 0, w, h })
+    // Short hedge islands that touch neither each other nor the wing's edge: they only break the sight lines.
+    const used = new Set<number>()
+    const free = (vc: number, vr: number) => !used.has(vr * (w + 1) + vc)
+    for (let tries = 0; tries < style.islands * 4 && used.size < style.islands * 4; tries++) {
+      const len = 1 + Math.floor(rng() * 3)
+      const horizontal = rng() < 0.5
+      const vc = 1 + Math.floor(rng() * (w - 1 - (horizontal ? len : 0)))
+      const vr = 1 + Math.floor(rng() * (h - 1 - (horizontal ? 0 : len)))
+      const verts = Array.from({ length: len + 1 }, (_, i) => (horizontal ? [vc + i, vr] : [vc, vr + i]) as [number, number])
+      const near = verts.some(([a, b]) => !free(a, b) || !free(a + 1, b) || !free(a - 1, b) || !free(a, b + 1) || !free(a, b - 1))
+      if (near) continue
+      verts.forEach(([a, b]) => used.add(b * (w + 1) + a))
+      for (let i = 0; i < len; i++) {
+        if (horizontal) m.h[vr]![vc + i] = true
+        else m.v[vr + i]![vc] = true
+      }
+    }
+    // A clearing in the middle (a place for a chest) is just open field.
+    chambers.push({ c: Math.floor((w - rs) / 2), r: Math.floor((h - rs) / 2), w: rs, h: rs })
+    return m
+  }
+  const m = growingTree(rng, w, h, style.newest)
+  if (style.braid > 0) braid(rng, m, style.braid)
+  for (let i = 0; i < style.rooms; i++) {
+    for (let tries = 0; tries < 20; tries++) {
+      const room = { c: 1 + Math.floor(rng() * (w - rs - 1)), r: 1 + Math.floor(rng() * (h - rs - 1)), w: rs, h: rs }
+      if (chambers.some((o) => Math.abs(o.c - room.c) < rs + 2 && Math.abs(o.r - room.r) < rs + 2)) continue
+      carve(m, room)
+      chambers.push(room)
+      break
+    }
+  }
+  return m
+}
+
+/** Opens every cell the walk from cell 0 can't reach to a reachable neighbor, so the whole maze is one piece. */
+const connect = (m: MazeGrid) => {
+  for (;;) {
+    const { dist } = distances(m, 0, 0)
+    let fixed = false
+    for (let r = 0; r < m.rows && !fixed; r++) for (let c = 0; c < m.cols && !fixed; c++) {
+      if (dist[r * m.cols + c]! >= 0) continue
+      for (const [dc, dr] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+        const nc = c + dc
+        const nr = r + dr
+        if (nc < 0 || nr < 0 || nc >= m.cols || nr >= m.rows || dist[nr * m.cols + nc]! < 0) continue
+        if (dr === -1) m.h[r]![c] = false
+        else if (dr === 1) m.h[r + 1]![c] = false
+        else if (dc === -1) m.v[r]![c] = false
+        else m.v[r]![c + 1] = false
+        fixed = true
+        break
+      }
+    }
+    if (!fixed) return
+  }
+}
+
+/** Knocks the wall between (c, r) and the cell beside it on `side`. */
+const door = (m: MazeGrid, c: number, r: number, side: Side) => {
+  if (side === 0) m.h[r]![c] = false
+  else if (side === 2) m.h[r + 1]![c] = false
+  else if (side === 3) m.v[r]![c] = false
+  else m.v[r]![c + 1] = false
+}
+
+/**
+ * Builds the maze of a site from its own seed: an open courtyard in the middle (the heart's), four wings in a pinwheel around it
+ * (each of a different kind: long avenues, a thicket of short branches, halls, a garden of hedge islands), a door or two between
+ * neighboring wings and into the courtyard, and 4 to 5 ways in cut through the outer hedge.
+ */
+const carveSite = (seed: number): Pick<MazeSite, 'maze' | 'entrances' | 'chambers' | 'heart' | 'fromIn' | 'wings'> => {
   const rng = createRng(seed)
   const n = GRAND.size
-  const maze = growingTree(rng, n, n, GRAND.newest)
-  braid(rng, maze, GRAND.braid)
-  // Chambers, none touching another or the outer ring.
-  const chambers: Chamber[] = []
-  const rs = GRAND.roomSize
-  for (let tries = 0; tries < GRAND.rooms * 12 && chambers.length < GRAND.rooms; tries++) {
-    const c = 2 + Math.floor(rng() * (n - rs - 3))
-    const r = 2 + Math.floor(rng() * (n - rs - 3))
-    if (chambers.some((o) => Math.abs(o.c - c) < rs + 3 && Math.abs(o.r - r) < rs + 3)) continue
-    chambers.push({ c, r, w: rs, h: rs })
+  const k = GRAND.court
+  const a = (n - k) / 2
+  const maze = solidMaze(n, n)
+  const court: Chamber = { c: a, r: a, w: k, h: k }
+  // The pinwheel: each wing runs along one side of the courtyard and past its corner (north, east, south, west).
+  const rects: Rect[] = [
+    { c: 0, r: 0, w: a + k, h: a },
+    { c: a + k, r: 0, w: n - a - k, h: a + k },
+    { c: a, r: a + k, w: n - a, h: n - a - k },
+    { c: 0, r: a, w: a, h: n - a },
+  ]
+  const kinds = shuffle(rng, Object.keys(GRAND.wings) as WingKind[])
+  const chambers: Chamber[] = [court]
+  const wings = rects.map((rect, i): Wing => ({ ...rect, kind: kinds[i]! }))
+  for (const wing of wings) {
+    const rooms: Chamber[] = []
+    const sub = carveWing(rng, wing.kind, wing.w, wing.h, rooms)
+    for (let r = 0; r <= wing.h; r++) for (let c = 0; c < wing.w; c++) maze.h[wing.r + r]![wing.c + c] = sub.h[r]![c]!
+    for (let r = 0; r < wing.h; r++) for (let c = 0; c <= wing.w; c++) maze.v[wing.r + r]![wing.c + c] = sub.v[r]![c]!
+    for (const room of rooms) chambers.push({ ...room, c: room.c + wing.c, r: room.r + wing.r })
   }
-  for (const room of chambers) carve(maze, room)
+  carve(maze, court)
+  // Doors: one or two on each border between neighboring wings (the pinwheel's ring), at a random place along it.
+  const pick = (from: number, len: number) => from + Math.floor(rng() * len)
+  const twice = (f: () => void) => {
+    f()
+    if (rng() < 0.5) f()
+  }
+  twice(() => door(maze, a + k - 1, pick(0, a), 1)) // north | east
+  twice(() => door(maze, pick(a + k, n - a - k), a + k - 1, 2)) // east | south
+  twice(() => door(maze, a, pick(a + k, n - a - k), 3)) // south | west
+  twice(() => door(maze, pick(0, a), a - 1, 2)) // west | north
+  // The courtyard's gates, to two wings (a third at times).
+  const gates = shuffle(rng, [0, 1, 2, 3] as Side[]).slice(0, 2 + (rng() < 0.4 ? 1 : 0))
+  for (const side of gates) {
+    const along = pick(a, k)
+    if (side === 0) door(maze, along, a, 0)
+    else if (side === 2) door(maze, along, a + k - 1, 2)
+    else if (side === 3) door(maze, a, along, 3)
+    else door(maze, a + k - 1, along, 1)
+  }
+  connect(maze)
   // The ways in: spread over the four sides, a corner's width apart.
   const count = GRAND.entrances[0] + Math.floor(rng() * (GRAND.entrances[1] - GRAND.entrances[0] + 1))
   const sides = shuffle(rng, [0, 1, 2, 3] as Side[])
@@ -87,23 +203,18 @@ const carveSite = (seed: number): Pick<MazeSite, 'maze' | 'entrances' | 'chamber
   for (let i = 0; i < count; i++) {
     const side = sides[i % 4]!
     for (let tries = 0; tries < 20; tries++) {
-      const k = 3 + Math.floor(rng() * (n - 6))
-      const e = side === 0 ? { c: k, r: 0, side } : side === 2 ? { c: k, r: n - 1, side } : side === 3 ? { c: 0, r: k, side } : { c: n - 1, r: k, side }
-      if (entrances.some((o) => o.side === side && Math.abs(o.c - e.c) + Math.abs(o.r - e.r) < 8)) continue
-      entrances.push(e)
-      open(maze, e)
+      const e = pick(3, n - 6)
+      const at = side === 0 ? { c: e, r: 0, side } : side === 2 ? { c: e, r: n - 1, side } : side === 3 ? { c: 0, r: e, side } : { c: n - 1, r: e, side }
+      if (entrances.some((o) => o.side === side && Math.abs(o.c - at.c) + Math.abs(o.r - at.r) < 8)) continue
+      entrances.push(at)
+      open(maze, at)
       break
     }
   }
-  // Steps from the nearest way in, and the chamber farthest from all of them for the heart.
+  // Steps from the nearest way in to each cell.
   const fromIn: number[] = Array<number>(n * n).fill(Infinity)
   for (const e of entrances) distances(maze, e.c, e.r).dist.forEach((d, i) => d >= 0 && d < fromIn[i]! && (fromIn[i] = d))
-  let heart = 0
-  chambers.forEach((room, i) => {
-    const mid = fromIn[(room.r + 1) * n + room.c + 1]!
-    if (mid > fromIn[(chambers[heart]!.r + 1) * n + chambers[heart]!.c + 1]!) heart = i
-  })
-  return { maze, entrances, chambers, heart, fromIn }
+  return { maze, entrances, chambers, heart: 0, fromIn, wings }
 }
 
 /** Sites by the run's terrain seed and block (`(bx, by)` packed in one number): pure, built once each. */
@@ -218,14 +329,6 @@ export const clearBetween = (site: MazeSite, ax: number, ay: number, bx: number,
   const n = Math.ceil(d / 4)
   for (let i = 1; i < n; i++) if (isHedge(site, ax + ((bx - ax) * i) / n, ay + ((by - ay) * i) / n)) return false
   return true
-}
-
-/** How far a ray from (x, y) at `angle` goes before it meets hedge (at most `max` px), by 3 px steps. */
-export const rayLength = (site: MazeSite, x: number, y: number, angle: number, max: number) => {
-  const dx = dm.cos(angle)
-  const dy = dm.sin(angle)
-  for (let d = 3; d < max; d += 3) if (isHedge(site, x + dx * d, y + dy * d)) return d
-  return max
 }
 
 /** A straight run of hedge, in world px, as the terrain's solids see it (a horizontal or vertical segment with its half thickness). */
