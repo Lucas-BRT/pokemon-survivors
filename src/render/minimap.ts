@@ -1,7 +1,11 @@
 import { GRAND } from '../data/mazeEvents'
 import { mazeSitesNear } from '../game/grandMaze'
 import { seenCells } from './mazeSight'
-import { caveFog, fogKey, SEEN_SCALE } from './caveSight'
+import { caveFog, fogKey, lit, SEEN_SCALE } from './caveSight'
+import { shownLevels } from './caveDark'
+import { spaceAt } from '../game/dungeon'
+import { atDepth, spaceRects } from '../game/lightSources'
+import type { PlaceInteriorOf } from '../game/place'
 import { context2d, createCanvas, fromStrings, lazy, blitPacked, textSprite, type Palette, type PixelSprite } from '../engine/pixelart'
 import { hash2 } from '../engine/rng'
 import type { BiomeId } from '../data/biomes'
@@ -384,6 +388,45 @@ const drawRoom = (ctx: Ctx, v: View, room: Room, tall = false) => {
   for (const river of plan.lava ?? []) for (const [x, y] of river.pts) fillEllipse(ctx, v, room.x + x, room.y + y, river.w / 2, river.w / 2)
 }
 
+/* ---------------- Cave light ---------------- */
+
+/** The tint of a lit-up room on the map: from the dark of an unlit room to a warm light, by the share of the ceiling its level reaches. */
+const LIGHT_DARK = [18, 14, 34] as const
+const LIGHT_WARM = [255, 236, 160] as const
+
+/**
+ * What the team has lit of a cave floor, on the map: every visited room and corridor takes a tint by its level of light (the one the
+ * dark draws, `shownLevels`): nearly black when nobody lit it (the deeper the floor the darker it starts), warm as its light sources
+ * come on, and a dot on each source (bright when on, dim when off) in the spaces already seen.
+ */
+const drawCaveLight = (ctx: Ctx, v: View, inside: PlaceInteriorOf<'cave'>) => {
+  const plan = inside.state.plan
+  const shown = plan ? shownLevels(plan) : undefined
+  if (!plan || !shown) return
+  const base = atDepth(lit, inside.state.floor).floor
+  shown.forEach((level, space) => {
+    if (level <= 0.001) return
+    // 0 (the floor of a visited room at the cave's depth) .. 1 (the most any number of sources lights a room to).
+    const k = Math.max(0, Math.min(1, (level - base) / Math.max(0.01, lit.max - base)))
+    const dim = 1 - Math.min(1, level / lit.max)
+    // Unlit: a dark veil, deeper where the floor starts darker; lit: the warm light over it.
+    ctx.fillStyle = `rgba(${LIGHT_DARK[0]},${LIGHT_DARK[1]},${LIGHT_DARK[2]},${(0.55 * dim).toFixed(3)})`
+    for (const r of spaceRects(plan, space)) ctx.fillRect(Math.round((inside.x + r.x) / v.scale - v.ox), Math.round((inside.y + r.y) / v.scale - v.oy), Math.max(1, Math.round(r.w / v.scale)), Math.max(1, Math.round(r.h / v.scale)))
+    if (k > 0.02) {
+      ctx.fillStyle = `rgba(${LIGHT_WARM[0]},${LIGHT_WARM[1]},${LIGHT_WARM[2]},${(0.5 * k).toFixed(3)})`
+      for (const r of spaceRects(plan, space)) ctx.fillRect(Math.round((inside.x + r.x) / v.scale - v.ox), Math.round((inside.y + r.y) / v.scale - v.oy), Math.max(1, Math.round(r.w / v.scale)), Math.max(1, Math.round(r.h / v.scale)))
+    }
+  })
+  for (const k of inside.state.sources) {
+    const space = spaceAt(plan, k.x, k.y)
+    if (space < 0 || (shown[space] ?? 0) <= 0.001) continue
+    const x = Math.round((inside.x + k.x) / v.scale - v.ox)
+    const y = Math.round((inside.y + k.y) / v.scale - v.oy)
+    ctx.fillStyle = k.on ? '#9ff0ff' : '#3a4660'
+    ctx.fillRect(x, y, k.on ? 2 : 1, k.on ? 2 : 1)
+  }
+}
+
 /* ---------------- Cave fog ---------------- */
 
 /** Covers every map px the team hasn't seen with the dark around the room. */
@@ -515,6 +558,7 @@ export const drawMinimap = (ctx: Ctx, g: Game, shape: MinimapShape, t: number) =
     const inside = g.place.inside
     // A cave floor is a maze to find the way through: only what the team has lit shows, the stairs once seen.
     const seen = inside?.id === 'cave' && inside.state.plan ? caveFog(g, inside.state.plan, inside.state.visited, inside.x, inside.y) : null
+    if (inside?.id === 'cave' && inside.state.plan) drawCaveLight(ctx, v, inside)
     if (seen) drawFog(ctx, v, seen)
     const stairs = inside?.id === 'cave' ? inside.state.stairs : null
     if (inside && stairs) {

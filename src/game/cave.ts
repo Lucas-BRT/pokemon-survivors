@@ -9,7 +9,7 @@ import { CAVE_TRAP, caveLevel } from '../data/caveLevels'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { spawnAlpha } from './alphas'
 import { levelOf, levelsOf } from './caveLevel'
-import { onSources, type LightSource } from './lightSources'
+import { atDepth, onSources, type LightSource } from './lightSources'
 import { drawNpc, openShop, type CaveShop } from './caveShop'
 import { dropItem } from './consumables'
 import { floorShapes, generateFloor, generateFloorV2, roomAt, type DungeonFloor, type Rect } from './dungeon'
@@ -214,7 +214,7 @@ const darkSpot = (inside: CaveInside) => (g: Game) => {
       const room = seen[Math.floor(g.rng() * seen.length)]!
       // The brighter the room, the fewer foes the dark sends into it, and fewer still in rooms already explored, growing as the floor's clock runs down.
       const { explored, ramp } = CAVE_GEN.spawn
-      const level = levelsOf(plan, inside.state.sources, CAVE.lit)[room]!
+      const level = levelsOf(plan, inside.state.sources, atDepth(CAVE.lit, inside.state.floor))[room]!
       const calm = dm.sq(1 - level / CAVE.lit.max)
       const lingered = PROCGEN.cave ? 1 + (ramp * (floorTime(inside) - inside.left)) / floorTime(inside) : 1
       if (g.rng() >= explored * calm * lingered) continue
@@ -224,7 +224,7 @@ const darkSpot = (inside: CaveInside) => (g: Game) => {
     } else {
       // The treasure chamber: the same rule, with its crystals' light spread over the whole cavern.
       const { explored } = CAVE_GEN.spawn
-      const level = levelOf(onSources(inside.state.sources).length, Math.PI * CHAMBER.r * CHAMBER.r, CAVE.lit)
+      const level = levelOf(onSources(inside.state.sources).length, Math.PI * CHAMBER.r * CHAMBER.r, atDepth(CAVE.lit, Math.min(inside.state.floor, caveLevel(inside.state.level).floors - 1)))
       if (g.rng() >= explored * dm.sq(1 - level / CAVE.lit.max)) continue
       const a = range(g.rng, 0, TAU)
       const d = range(g.rng, 40, CHAMBER.r - 16)

@@ -23,9 +23,16 @@ import * as dm from '../engine/dmath'
 export type LightSource = { x: number; y: number; kind: LightKind; on: boolean; left: number; age: number }
 
 /** How lit a space is, from its energy: the pure rule behind the light the screen draws and how often the dark spawns foes. */
-export type LevelNumbers = { floor: number; max: number; e0: number; gamma: number; aref: number; reach: number; door: number }
+export type LevelNumbers = { floor: number; max: number; e0: number; gamma: number; aref: number; reach: number; door: number; depth: number }
 
 export const levelOf = (e: number, area: number, n: LevelNumbers) => n.floor + (n.max - n.floor) * (1 - dm.exp(-e / (n.e0 * dm.pow(area / n.aref, n.gamma))))
+
+/**
+ * The numbers as they are `floor` floors down (0 is B1F): each floor down multiplies `L0`, the level a visited space starts at, by `depth`
+ * (0.72: B1F 0.07, B2F 0.050, B3F 0.036, B4F 0.026, B5F 0.019), so the deeper the cave the darker a room that nobody lit stays. The ceiling and the
+ * sources' energy are the same, so lighting a room still brings it up (from a lower start).
+ */
+export const atDepth = <N extends LevelNumbers>(n: N, floor: number): N => ({ ...n, floor: n.floor * dm.pow(n.depth, floor) })
 
 /** The numbers of the fall-off with distance (`LIGHT_FIELD`). */
 export type RemoteNumbers = { remoteMin: number; remoteDecay: number; remoteReach: number; remoteFade: number }

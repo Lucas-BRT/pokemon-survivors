@@ -3,7 +3,7 @@ import { LIGHT_FIELD } from '../data/lightSources'
 import { CAVE } from '../data/places'
 import { createRng } from '../engine/rng'
 import { generateFloorV2, spaceAt, type DungeonFloor } from './dungeon'
-import { attenuation, distToSpace, playersDistance, seenLevels, spaceEnergies, spaceLevels, type LightSource } from './lightSources'
+import { atDepth, attenuation, distToSpace, playersDistance, seenLevels, spaceEnergies, spaceLevels, type LightSource } from './lightSources'
 
 const n = { ...CAVE.lit, ...LIGHT_FIELD }
 
@@ -122,5 +122,32 @@ describe('how the light is seen from another space', () => {
     expect(both.level[a]).toBeCloseTo(levels[a]!)
     expect(playersDistance(plan, a, [middle(plan, a), middle(plan, b)])).toBe(0)
     expect(seenLevels(plan, levels, () => false, [middle(plan, a)], n).level[a]).toBe(0)
+  })
+})
+
+describe('the deeper the floor, the darker a room that nobody lit', () => {
+  it('multiplies the floor level by `depth` for each floor down, and lights still bring a room up from there', () => {
+    expect(atDepth(n, 0).floor).toBeCloseTo(n.floor)
+    let before = n.floor
+    for (let f = 1; f <= 4; f++) {
+      const d = atDepth(n, f)
+      expect(d.floor).toBeCloseTo(n.floor * n.depth ** f)
+      expect(d.floor).toBeLessThan(before)
+      before = d.floor
+    }
+    const plan = floor()
+    const none = (f: number) => spaceLevels(plan, [], atDepth(n, f))[plan.startRoom]!
+    expect(none(3)).toBeLessThan(none(0))
+    // A source on lifts the room above its dark start on every floor, and the ceiling stays the same.
+    const [x, y] = [middle(plan, plan.startRoom).x, middle(plan, plan.startRoom).y]
+    for (const f of [0, 2, 4]) {
+      const lit1 = spaceLevels(plan, [source(x, y)], atDepth(n, f))[plan.startRoom]!
+      expect(lit1).toBeGreaterThan(none(f))
+      expect(lit1).toBeLessThanOrEqual(n.max)
+    }
+    // A visited room with nothing on is at the dark start of its floor from anywhere.
+    const levels = spaceLevels(plan, [], atDepth(n, 3))
+    const seen = seenLevels(plan, levels, (s) => s === plan.startRoom, [middle(plan, plan.startRoom)], atDepth(n, 3))
+    expect(seen.level[plan.startRoom]).toBeCloseTo(atDepth(n, 3).floor)
   })
 })

@@ -2,7 +2,8 @@ import { context2d, createCanvas } from '../engine/pixelart'
 import { caveLight } from '../game/cave'
 import { floorShapes, roomAt, spaceAt, type DungeonFloor } from '../game/dungeon'
 import { LIGHT_KINDS } from '../data/lightSources'
-import { onSources, seenLevels, spaceRects } from '../game/lightSources'
+import { caveLevel } from '../data/caveLevels'
+import { atDepth, onSources, seenLevels, spaceRects } from '../game/lightSources'
 import { CAVE } from '../data/places'
 import type { PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
@@ -91,6 +92,9 @@ const shownChamber = new WeakMap<object, number>()
 const corridorsWalked = new WeakMap<DungeonFloor, Set<number>>()
 let lastAt = 0
 
+/** The levels of the spaces as shown now on floor `plan` (rooms, then corridors; absent before the first frame): the minimap reads them too. */
+export const shownLevels = (plan: DungeonFloor): readonly number[] | undefined => shownRooms.get(plan)
+
 /**
  * Draws the cave's dark over the world and returns the lights' circles
  * (x, y, radius in world px), which the eyes of what stands outside them need.
@@ -120,8 +124,8 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
       if (space >= plan.rooms.length) walked.add(space)
     }
     spaceVisited = (space) => (space < plan.rooms.length ? s.visited.includes(space) : walked.has(space))
-    const goal = roomLevels(plan, s.sources)
-    const seen = seenLevels(plan, goal, spaceVisited, team, lit)
+    const goal = roomLevels(plan, s.sources, s.floor)
+    const seen = seenLevels(plan, goal, spaceVisited, team, atDepth(lit, s.floor))
     factor = seen.factor
     let shown = shownRooms.get(plan)
     if (!shown) shownRooms.set(plan, (shown = goal.map(() => 0)))
@@ -133,7 +137,7 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
   } else {
     const c = inside.layout.floor[0]
     if (c?.kind === 'circle') {
-      const goal = roomLevel(lit.allOn ? s.sources.length : onSources(s.sources).length, Math.PI * c.r * c.r)
+      const goal = roomLevel(lit.allOn ? s.sources.length : onSources(s.sources).length, Math.PI * c.r * c.r, Math.min(s.floor, caveLevel(s.level).floors - 1))
       const now = (shownChamber.get(inside.layout) ?? 0) + (goal - (shownChamber.get(inside.layout) ?? 0)) * ease
       shownChamber.set(inside.layout, now)
       areas.push({ cx: inside.x + c.x, cy: inside.y + c.y, r: c.r, level: now })

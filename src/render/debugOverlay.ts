@@ -252,7 +252,7 @@ const caveRooms = (ctx: Ctx, g: Game, cx: number, cy: number, levels: boolean, r
   if (inside?.id !== 'cave' || !inside.state.plan) return
   const s = inside.state
   const plan = s.plan!
-  const lv = levels ? roomLevels(plan, s.sources) : null
+  const lv = levels ? roomLevels(plan, s.sources, s.floor) : null
   const here = new Set(g.players.map((p) => roomAt(plan, p.x - inside.x, p.y - inside.y)))
   plan.rooms.forEach((r, i) => {
     const x = inside.x + r.x - cx

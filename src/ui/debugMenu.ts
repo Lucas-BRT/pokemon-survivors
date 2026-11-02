@@ -86,6 +86,7 @@ const LIGHT: ReadonlyArray<{ group: string; controls: readonly LightControl[]; e
       { key: 'e0', label: 'E0: energy for 63% (average room)', min: 0.1, max: 3, step: 0.05 },
       { key: 'gamma', label: 'γ: dilution by room size', min: 0, max: 1.5, step: 0.05 },
       { key: 'aref', label: 'Reference area (px²)', min: 4000, max: 30000, step: 500 },
+      { key: 'depth', label: 'Depth: L0 multiplier for each floor down', min: 0.3, max: 1, step: 0.01 },
     ],
   },
   {

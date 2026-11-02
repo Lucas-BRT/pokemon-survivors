@@ -115,8 +115,9 @@ export const CAVE = {
    * (the dark gone). A room entered starts at `floor`; the crystals in it (and, at `door` of their strength, the ones in a corridor's
    * door tile, fading over `reach` px) add energy E, and a bigger room dilutes it: L = floor + (`max` - floor)(1 - exp(-E / (`e0` S^`gamma`))),
    * `max` the most any number of crystals lights a room to, S being the room's area over `aref` px². `fade` is how fast the shown level follows (1/s).
+   * `depth`: every floor down multiplies `floor` by it (`atDepth`), so a visited room that nobody lit starts darker the deeper the cave.
    */
-  lit: { black: 0.97, floor: 0.07, max: 0.55, e0: 1.8, gamma: 1, aref: 11520, reach: 104, door: 0.5, fade: 3 },
+  lit: { black: 0.97, floor: 0.07, max: 0.55, e0: 1.8, gamma: 1, aref: 11520, reach: 104, door: 0.5, fade: 3, depth: 0.72 },
   /** Moves of these types go through the cave's walls and aim at foes behind them (the others stop at the rock and only aim at foes in view). */
   phase: ['ghost', 'psychic'],
 } as const
