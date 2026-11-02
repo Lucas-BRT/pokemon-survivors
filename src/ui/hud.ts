@@ -60,6 +60,8 @@ export const createHud = (root: HTMLElement, onSpecial: () => void, onMega: () =
   const timer = h('div', { class: 'timer' }, weather, clock)
   const kills = h('span')
   const coins = h('span')
+  const gems = h('span')
+  const gemCounter = h('div', { class: 'kills coins hidden' }, h('span', {}, '◆'), gems)
   const candies = h('span')
   // Noite das Bruxas: the candies of a haunted run, beside the ₽.
   const candyCounter = h('div', { class: 'kills treats hidden' }, h('img', { src: treatIcon(), alt: t().halloween.candies }), candies)
@@ -113,6 +115,7 @@ export const createHud = (root: HTMLElement, onSpecial: () => void, onMega: () =
           { class: 'counters' },
           h('div', { class: 'kills' }, h('img', { src: pokeballIcon(), alt: '' }), kills),
           h('div', { class: 'kills coins' }, h('img', { src: coinIcon(0), alt: '' }), coins),
+          gemCounter,
           candyCounter,
         ),
         pause,
@@ -211,6 +214,10 @@ export const createHud = (root: HTMLElement, onSpecial: () => void, onMega: () =
     }
     setText(kills, String(g.kills))
     setText(coins, formatPokeDollars(g.coins))
+    // Cave gems show once the run has found one.
+    const found = localPlayer(g).gems
+    gemCounter.classList.toggle('hidden', found === 0)
+    setText(gems, String(found))
     if (g.halloween) {
       candyCounter.classList.remove('hidden')
       setText(candies, String(g.candies))

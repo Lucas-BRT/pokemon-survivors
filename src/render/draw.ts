@@ -1,3 +1,4 @@
+import { CAVE } from '../data/places'
 import { drawEvoItem } from './evoItemArt'
 import { blitCentered, blitPacked, blitEllipse, blitRing, blitRotated, context2d, createCanvas, lazy, textSprite } from '../engine/pixelart'
 import { HAZARD_COLORS } from './hazardColors'
@@ -449,6 +450,24 @@ export const drawSparkles = (ctx: Ctx, x: number, cy: number, size: number, sinc
   blitCentered(ctx, stars[frame]!, x + ox, cy + oy)
 }
 
+/**
+ * The cave's crystals a player touched sparkle as a shiny does (the burst, then twinkles) for as long as they shine, and flicker out
+ * in their last seconds (`CAVE.crystal`). Over the world, after what stands in front of them.
+ */
+const drawCrystalGlints = (ctx: Ctx, g: Game) => {
+  const inside = g.place.inside
+  if (inside?.id !== 'cave') return
+  const { blink } = CAVE.crystal
+  for (const c of inside.state.touched) {
+    const at = inside.state.lights[c.i]
+    if (!at) continue
+    // Blinking: every other eighth of a second off.
+    if (c.left < blink && Math.floor(g.now * 8) % 2 === 0) continue
+    // Only the twinkle of a shiny (its burst is for an entrance): `since` stays past the burst, so a foot held on the crystal never restarts it.
+    drawSparkles(ctx, inside.x + at[0], inside.y + at[1] - 9, 26, 1 + g.now, 40 + c.i)
+  }
+}
+
 /* ---------------- Entities ---------------- */
 
 /** True while the player is up in the sky, where Pokémon with a Fly sheet fly instead of walking. */
@@ -675,6 +694,10 @@ const drawPickups = (ctx: Ctx, g: Game, t: number, visible: (x: number, y: numbe
       drawEvoItem(ctx, k, k.x, k.y + bob, t)
       continue
     }
+    if (k.kind === 'gem') {
+      drawGem(ctx, k.x, k.y + bob, t + k.id)
+      continue
+    }
     const sprite =
       k.kind === 'xp' ? candies[xpTier(k.value)]!
       : k.kind === 'coin' ? coins[coinTier(k.value)]!
@@ -683,6 +706,21 @@ const drawPickups = (ctx: Ctx, g: Game, t: number, visible: (x: number, y: numbe
       : PICKUPS.pokeball()
     blitCentered(ctx, sprite, k.x, k.y + bob)
   }
+}
+
+/** A cave gem: a small cut crystal over a pale glow, with a glint now and then. */
+const drawGem = (ctx: Ctx, x: number, y: number, t: number) => {
+  blitEllipse(ctx, 7, 5, 'rgba(136,224,248,0.25)', x, y + 1)
+  const px = Math.round(x)
+  const py = Math.round(y)
+  ctx.fillStyle = '#2878a8'
+  ctx.fillRect(px - 2, py - 3, 4, 6)
+  ctx.fillRect(px - 3, py - 2, 6, 4)
+  ctx.fillStyle = '#58c8e8'
+  ctx.fillRect(px - 2, py - 2, 4, 4)
+  ctx.fillStyle = '#e8fcff'
+  ctx.fillRect(px - 2, py - 2, 2, 2)
+  if (Math.floor(t * 3) % 5 === 0) ctx.fillRect(px + 2, py - 4, 1, 1)
 }
 
 /* ---------------- Evolution scene ---------------- */
@@ -1092,6 +1130,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   drawLandmarkAir(ctx, g, t, visible)
   drawWings(ctx, g, t)
   drawPlaceOver(ctx, g, camX, camY)
+  drawCrystalGlints(ctx, g)
   drawSleep(ctx, g, t)
   drawKitStatus(ctx, g, t, visible)
   if (!liftMe) drawPlayerAir(ctx, g, t)

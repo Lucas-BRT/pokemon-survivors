@@ -5,6 +5,7 @@ import { BOSS_TMS, LEGENDARY_TMS } from '../data/tms'
 import { MYTHICALS } from '../data/waves'
 import type { RiftLegend } from '../data/rifts'
 import { playerForm } from './branch'
+import { buyWare } from './caveShop'
 import { dropItem } from './consumables'
 import { burst, floatText } from './effects'
 import { applyOffer, branchOffers, recomputeStats } from './leveling'
@@ -179,6 +180,10 @@ export const pickTm = (g: Game, offer: Offer): boolean => {
       }
       learn(g, offer, null)
       return true
+    }
+    case 'ware': {
+      const { close } = buyWare(g, offer)
+      return close
     }
     case 'branch': {
       applyOffer(g, offer)

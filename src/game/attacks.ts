@@ -9,6 +9,8 @@ import { lungeStep, mineArmed, mineBlast, rollStep, TURRET_RANGE } from './moveR
 import { nearestEnemy } from './queries'
 import { inDoorway } from './rift'
 import { atCaveChest } from './cave'
+import { clearShot, onFloor } from './dungeon'
+import { CAVE } from '../data/places'
 import { inStandRing } from './mapEvents'
 import { spawnAttack } from './spawn'
 import { typeEvolvedTrail } from './typeEvolutions'
@@ -238,10 +240,20 @@ const overlaps = (a: Attack, e: Enemy) => {
 
 const reach = (a: Attack) => (a.shape.kind === 'circle' ? a.shape.r : dm.hypot(a.shape.w, a.shape.h) / 2)
 
+/** The cave floor's layout and where it stands, when a hitbox of this type is stopped by its walls (ghost and psychic moves go through, `CAVE.phase`). */
+const wallsOf = (g: Game, a: Attack) => {
+  const inside = g.place.inside
+  const plan = inside?.id === 'cave' ? inside.state.plan : null
+  return inside && plan && !(CAVE.phase as readonly string[]).includes(a.type) ? { plan, x: inside.x, y: inside.y } : null
+}
+
 const collide = (g: Game, a: Attack) => {
+  const walls = wallsOf(g, a)
   for (const i of query(g.grid, a.x, a.y, reach(a) + 40, neighbors)) {
     const e = g.enemies[i]
     if (!e || e.dying >= 0 || isAlly(g, e) || !overlaps(a, e)) continue
+    // The rock hides a foe from a hit: only what the hitbox can see in a straight line is touched.
+    if (walls && !clearShot(walls.plan, a.x - walls.x, a.y - walls.y, e.x - walls.x, e.y - e.radius - walls.y)) continue
     if ((a.hits.get(e.id) ?? -1) > g.now) continue
     if (a.blast > 0) return detonate(g, a, false)
     a.hits.set(e.id, g.now + a.hitInterval)
@@ -312,6 +324,14 @@ export const updateAttacks = (g: Game, dt: number) => {
     if (a.age < 0) continue
     g.player = ownerOf(g, a.owner)
     move(g, a, a.motion, dt)
+    // A shot in flight stops at the cave's rock.
+    if (a.age >= 0 && FLYING.has(a.motion.kind)) {
+      const walls = wallsOf(g, a)
+      if (walls && !onFloor(walls.plan, a.x - walls.x, a.y - walls.y)) {
+        a.ttl = a.age
+        continue
+      }
+    }
     if (a.grow > 0 && a.shape.kind === 'circle') a.shape = { kind: 'circle', r: a.shape.r + a.grow * dt }
     trail(g, a)
     evolvedTick(g, a, dt)

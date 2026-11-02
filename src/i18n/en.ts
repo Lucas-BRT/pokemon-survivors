@@ -1906,6 +1906,45 @@ export const en: Messages = {
     specialNote: 'At the evolution, the special becomes the chosen form’s.',
   },
 
+  /** The cave's Cristalário (`data/caveShop.ts`, `ui/caveShop.ts`). */
+  caveShop: {
+    title: (npc: string) => `${npc}'s Crystal Room`,
+    sub: 'Wares for this run only: some last until the stairs.',
+    wallet: (coins: string, gems: number) => `You have ${coins} and ${gems} gems`,
+    gems: (n: number) => `${n} gems`,
+    broke: 'Not enough ₽ or gems',
+    leave: 'Leave',
+    soldOut: 'Sold out',
+    bought: (name: string) => `Bought *${name}*!`,
+    stone: 'Evolution stone: yours for the rest of the run.',
+    seen: (npc: string) => `A ${npc} sells wares in this crystal room!`,
+    shinySeen: 'A shiny Sableye! It sells evolution stones.',
+    names: { lantern: 'Lantern', compass: 'Compass', fortune: 'Fortune' },
+    lines: {
+      clefairy: 'Hehe~ pretty crystals, pretty prices!',
+      chansey: 'Hurt? Make yourself at home.',
+      shuckle: 'Fresh berry juice, today only!',
+      nosepass: 'I follow north. Want to know where the exit is?',
+      lunatone: 'Moonlight guides those who walk in the dark.',
+      sableye: 'Hehe… gems? I trade them for something useful.',
+      sableyeShiny: 'Psst… rare stones, only the finest. Gems, please.',
+    },
+    wares: {
+      potion: 'Restores 30 HP.',
+      superPotion: 'Restores 60 HP.',
+      xAttack: '+50% damage for 20 s.',
+      xSpeed: 'More speed and shorter cooldowns for 20 s.',
+      maxRepel: 'Pushes enemies away for 6 s.',
+      expShare: 'Pulls in every EXP candy on the ground.',
+      pokeFlute: 'Puts the foes on screen to sleep for 6 s.',
+      revive: 'Gets you back up with 50% HP when you fall.',
+      rareCandy: 'Gains a level at once.',
+      lantern: 'A wider light until the stairs.',
+      compass: 'Shows the stairs on the minimap until you go down.',
+      fortune: '+50% ₽ picked up until the stairs.',
+    },
+  },
+
   /** TMs and the Move Tutor (`ui/tmPick.ts`, `game/tms.ts`). */
   tm: {
     titleBoss: (boss: string) => `${boss} left a TM!`,

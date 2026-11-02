@@ -14,13 +14,16 @@ describe('what the team has seen of a cave floor', () => {
     const here = mid(plan.startRoom)
     const there = mid(plan.stairsRoom)
     Object.assign(g.player, here)
-    const seen = caveFog(g, plan)
+    const seen = caveFog(g, plan, inside.state.visited, inside.x, inside.y)
     expect(wasSeen(seen, here.x, here.y)).toBe(true)
     expect(wasSeen(seen, there.x, there.y)).toBe(false)
-    // Walking on, the first spot stays known (the same set grows).
+    // Stepping into a room makes the whole of it known and keeps the first one known (the same set grows).
     Object.assign(g.player, there)
-    expect(caveFog(g, plan)).toBe(seen)
-    expect(wasSeen(seen, there.x, there.y)).toBe(true)
+    inside.state.visited.push(plan.stairsRoom)
+    const r = plan.rooms[plan.stairsRoom]!
+    expect(caveFog(g, plan, inside.state.visited, inside.x, inside.y)).toBe(seen)
+    expect(wasSeen(seen, inside.x + r.x + 3, inside.y + r.y + 3)).toBe(true)
+    expect(wasSeen(seen, inside.x + r.x + r.w - 3, inside.y + r.y + r.h - 3)).toBe(true)
     expect(wasSeen(seen, here.x, here.y)).toBe(true)
     // A cell far past the light is not.
     expect(wasSeen(seen, here.x + SEEN_SCALE * 40, here.y + SEEN_SCALE * 40)).toBe(false)

@@ -1904,6 +1904,45 @@ export const zh: Messages = {
     specialNote: '進化時，必殺技會變成所選型態的必殺技。',
   },
 
+  /** The cave's Cristalário (`data/caveShop.ts`, `ui/caveShop.ts`). */
+  caveShop: {
+    title: (npc: string) => `${npc} 的水晶室`,
+    sub: '只限本局使用的商品：部分效果持續到樓梯為止。',
+    wallet: (coins: string, gems: number) => `你有 ${coins} 和 ${gems} 顆寶石`,
+    gems: (n: number) => `${n} 顆寶石`,
+    broke: '₽ 或寶石不足',
+    leave: '離開',
+    soldOut: '已售完',
+    bought: (name: string) => `購買了 *${name}*！`,
+    stone: '進化石：本局剩下的時間都歸你。',
+    seen: (npc: string) => `${npc} 在這間水晶室賣東西！`,
+    shinySeen: '閃亮的 Sableye！它賣進化石。',
+    names: { lantern: '提燈', compass: '指南針', fortune: '幸運' },
+    lines: {
+      clefairy: '呵呵~ 漂亮的水晶，漂亮的價格！',
+      chansey: '受傷了嗎？請放輕鬆。',
+      shuckle: '新鮮的樹果汁，只有今天！',
+      nosepass: '我跟著北方走。想知道出口在哪嗎？',
+      lunatone: '月光會為在黑暗中行走的人引路。',
+      sableye: '嘿嘿… 寶石？我拿它換有用的東西。',
+      sableyeShiny: '噓… 稀有的石頭，只賣最好的。請付寶石。',
+    },
+    wares: {
+      potion: '回復 30 點 HP。',
+      superPotion: '回復 60 點 HP。',
+      xAttack: '20 秒內傷害 +50%。',
+      xSpeed: '20 秒內速度提升、冷卻縮短。',
+      maxRepel: '6 秒內推開敵人。',
+      expShare: '吸來地上所有的經驗糖果。',
+      pokeFlute: '讓畫面中的敵人沉睡 6 秒。',
+      revive: '倒下時以 50% HP 重新站起。',
+      rareCandy: '立刻升一級。',
+      lantern: '到樓梯為止，光線範圍更大。',
+      compass: '在小地圖上顯示樓梯，直到下樓。',
+      fortune: '到樓梯為止，拾取的 ₽ +50%。',
+    },
+  },
+
   /** TMs and the Move Tutor (`ui/tmPick.ts`, `game/tms.ts`). */
   tm: {
     titleBoss: (boss: string) => `${boss} 留下了一個TM！`,

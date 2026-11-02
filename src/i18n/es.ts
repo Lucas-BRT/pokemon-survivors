@@ -1908,6 +1908,45 @@ export const es: Messages = {
     specialNote: 'En la evolución, el especial pasa a ser el de la forma elegida.',
   },
 
+  /** The cave's Cristalário (`data/caveShop.ts`, `ui/caveShop.ts`). */
+  caveShop: {
+    title: (npc: string) => `Sala de cristales de ${npc}`,
+    sub: 'Artículos solo para esta partida: algunos duran hasta la escalera.',
+    wallet: (coins: string, gems: number) => `Tienes ${coins} y ${gems} gemas`,
+    gems: (n: number) => `${n} gemas`,
+    broke: 'Faltan ₽ o gemas',
+    leave: 'Salir',
+    soldOut: 'Agotado',
+    bought: (name: string) => `¡Compraste *${name}*!`,
+    stone: 'Piedra evolutiva: tuya el resto de la partida.',
+    seen: (npc: string) => `¡Un ${npc} vende artículos en esta sala de cristales!`,
+    shinySeen: '¡Un Sableye variocolor! Vende piedras evolutivas.',
+    names: { lantern: 'Linterna', compass: 'Brújula', fortune: 'Fortuna' },
+    lines: {
+      clefairy: 'Jeje~ ¡cristales bonitos, precios bonitos!',
+      chansey: '¿Herido? Ponte cómodo.',
+      shuckle: '¡Jugo de baya fresco, solo hoy!',
+      nosepass: 'Sigo el norte. ¿Quieres saber dónde está la salida?',
+      lunatone: 'La luz de la luna guía a quien camina en la oscuridad.',
+      sableye: 'Jeje… ¿gemas? Las cambio por algo útil.',
+      sableyeShiny: 'Psst… piedras raras, solo las mejores. Gemas, por favor.',
+    },
+    wares: {
+      potion: 'Recupera 30 de PS.',
+      superPotion: 'Recupera 60 de PS.',
+      xAttack: '+50% de daño durante 20 s.',
+      xSpeed: 'Más velocidad y menos recarga durante 20 s.',
+      maxRepel: 'Aleja a los enemigos durante 6 s.',
+      expShare: 'Atrae todos los caramelos de EXP del suelo.',
+      pokeFlute: 'Duerme a los enemigos en pantalla durante 6 s.',
+      revive: 'Te levanta con 50% de PS al caer.',
+      rareCandy: 'Sube un nivel al instante.',
+      lantern: 'Más luz hasta la escalera.',
+      compass: 'Muestra la escalera en el minimapa hasta bajar.',
+      fortune: '+50% de ₽ recogidos hasta la escalera.',
+    },
+  },
+
   /** TMs and the Move Tutor (`ui/tmPick.ts`, `game/tms.ts`). */
   tm: {
     titleBoss: (boss: string) => `¡${boss} dejó una MT!`,

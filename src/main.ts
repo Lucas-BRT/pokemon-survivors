@@ -86,6 +86,7 @@ import { legendDevTools } from './game/legendDev'
 import { bankCapture, captureDevTools, showCapture } from './ui/capture'
 import { riftDevTools } from './game/riftDev'
 import { placeDevTools } from './game/placeDev'
+import { applyDebug, parseDebug } from './game/debugStart'
 import { placeFeedback } from './ui/places'
 import { landmarkFeedback } from './ui/landmarks'
 import { PLACES } from './data/places'
@@ -164,6 +165,8 @@ import { rankingScreen, rankPanel } from './ui/ranking'
 import { confirmDialog, flashScreen, levelUp, pauseMenu, results, textBox, type Screen } from './ui/screens'
 import { abilityPick, branchPick } from './ui/abilityPick'
 import { tmPick } from './ui/tmPick'
+import { caveShopPick } from './ui/caveShop'
+import { toggleLightMenu } from './ui/lightMenu'
 import { isSettingsOpen, openSettings, settings, toggleMute } from './ui/settings'
 import { mapEventFeedback } from './ui/mapEvents'
 import { runShare, sharePreview, trainerShare } from './ui/share'
@@ -1116,6 +1119,13 @@ const loadRunSheets = async (families: readonly Variant[], opening: readonly Dex
   }
 }
 
+/** A dev-only `?debug=` run: starts the Pokémon (the saved partner unless `mon=` names one) and stages the game as the URL says. */
+const startDebugRun = async (spec: NonNullable<ReturnType<typeof parseDebug>>) => {
+  const id = Object.keys(PLAYABLE).find((k) => k === spec.mon) as PlayableId | undefined
+  await startRun(id ?? loadSave().partner)
+  if (run) applyDebug(run.game, spec)
+}
+
 /** Set while `startRun` loads a run. */
 let launching = false
 
@@ -1511,7 +1521,7 @@ const syncOverlay = (r: Run) => {
       break
     case 'tm':
       // A TM raising an owned move to a fork shows the fork's two branches, as a level-up would.
-      r.overlay = me.offers.some((o) => o.kind === 'branch') ? levelUp(ui, input, g, pick) : tmPick(ui, input, g, pick)
+      r.overlay = me.offers.some((o) => o.kind === 'branch') ? levelUp(ui, input, g, pick) : me.offers.some((o) => o.kind === 'ware') ? caveShopPick(ui, input, g, pick) : tmPick(ui, input, g, pick)
       break
     case 'curse':
       r.overlay = cursePick(ui, input, g, pick)
@@ -3637,9 +3647,12 @@ const boot = () => {
   document.documentElement.lang = LOCALES[locale()].tag
   // Someone's link (`?ref=`, a profile): remember who brought this device, before anything reads the URL.
   captureRef()
+  // Dev builds: `?debug=cave` opens straight into a run staged for testing (`game/debugStart.ts`).
+  const debug = import.meta.env.DEV ? parseDebug(location.search) : null
   const shared = rankingEnabled ? parseHandle(new URLSearchParams(location.search).get(PROFILE_PARAM)) : null
   const poll = accountsEnabled ? linkedPoll() : null
-  if (shared) showSharedProfile(shared)
+  if (debug) void startDebugRun(debug)
+  else if (shared) showSharedProfile(shared)
   else if (rankingEnabled && new URLSearchParams(location.search).has(IDEAS_PARAM)) showIdeasLink()
   else if (new URLSearchParams(location.search).has(SHOP_PARAM)) showTitle({ shop: 'shop', instant: true })
   else if (patreonReturn()) showPatreonReturn(patreonReturn() === 'linked')
@@ -4169,10 +4182,18 @@ const devArena = (cmd?: string, arg?: string, then?: string) => {
 
 // `ps.biome('cave')` and `ps.weather('rain')` stage a run for screenshots (they hold until the next scheduled change).
 if (import.meta.env.DEV) {
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'F4') {
+      e.preventDefault()
+      toggleLightMenu(() => run?.game)
+    }
+  })
   const withRun = (fn: (g: Game) => void) => (run ? fn(run.game) : console.warn('ps: start a run first'))
   Object.assign(window, {
     ps: {
       run: () => run,
+      /** The cave's light menu (F4 too): sliders for every number of the light, and a room lab (`ui/lightMenu.ts`). */
+      light: () => toggleLightMenu(() => run?.game),
       startRun,
       // Sheets loaded (their decoded MB now and at peak; `true` starts a new peak) and frame silhouettes cached right now (`render/sprites.ts`).
       sprites: (resetPeak = false) => ({ ...spriteMemory(resetPeak), overlays: overlayStats() }),

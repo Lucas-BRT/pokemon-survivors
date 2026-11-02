@@ -1,8 +1,21 @@
+import { clearShot, dormant } from './dungeon'
 import { onAnyScreen } from './players'
 import type { Enemy, Game } from './types'
 import { unseen } from './versusRules'
 import { focusedEnemy } from './versusKit'
 import * as dm from '../engine/dmath'
+
+/**
+ * In a cave, a foe in a room the team hasn't entered, or behind the rock from
+ * (x, y), can't be aimed at (the aimer's own type may phase through, `CAVE.phase`).
+ */
+const caveHides = (g: Game, e: Enemy, x: number, y: number) => {
+  const inside = g.place.inside
+  if (inside?.id !== 'cave' || !inside.state.plan) return false
+  const plan = inside.state.plan
+  if (dormant(plan, inside.state.visited, e.x - inside.x, e.y - inside.y)) return true
+  return !clearShot(plan, x - inside.x, y - inside.y, e.x - inside.x, e.y - e.radius - inside.y)
+}
 
 export const isAlive = (e: Enemy) => e.dying < 0
 
@@ -19,7 +32,7 @@ export const nearestEnemy = (g: Game, x: number, y: number, maxDist: number, exc
   for (const e of g.enemies) {
     if (!isAlive(e) || exclude?.has(e.id) || unseen(g, e)) continue
     const d = dm.sq(e.x - x) + dm.sq(e.y - y)
-    if (d < bestD) {
+    if (d < bestD && !caveHides(g, e, x, y)) {
       bestD = d
       best = e
     }

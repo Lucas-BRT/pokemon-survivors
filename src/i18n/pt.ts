@@ -2195,6 +2195,45 @@ export const pt = {
     specialNote: 'Na evolução, o especial passa a ser o da forma escolhida.',
   },
 
+  /** The cave's Cristalário (`data/caveShop.ts`, `ui/caveShop.ts`). */
+  caveShop: {
+    title: (npc: string) => `${npc} do Cristalário`,
+    sub: 'Itens só para esta partida: alguns valem até a escada.',
+    wallet: (coins: string, gems: number) => `Você tem ${coins} e ${gems} gemas`,
+    gems: (n: number) => `${n} gemas`,
+    broke: 'Faltam ₽ ou gemas',
+    leave: 'Sair',
+    soldOut: 'Esgotado',
+    bought: (name: string) => `Comprou *${name}*!`,
+    stone: 'Pedra de evolução: vale até o fim da partida.',
+    seen: (npc: string) => `Um ${npc} vende itens nesta sala de cristais!`,
+    shinySeen: 'Um Sableye brilhante! Ele vende pedras de evolução.',
+    names: { lantern: 'Lanterna', compass: 'Bússola', fortune: 'Sorte' },
+    lines: {
+      clefairy: 'Fufu~ cristais bonitos, preços bonitos!',
+      chansey: 'Machucado? Fique à vontade.',
+      shuckle: 'Suco fresquinho de baga, só hoje!',
+      nosepass: 'Sigo o norte. Quer saber onde fica a saída?',
+      lunatone: 'A luz da lua guia quem anda no escuro.',
+      sableye: 'Hehe… gemas? Eu troco por algo útil.',
+      sableyeShiny: 'Psiu… pedras raras, só as melhores. Gemas, por favor.',
+    },
+    wares: {
+      potion: 'Recupera 30 de HP.',
+      superPotion: 'Recupera 60 de HP.',
+      xAttack: '+50% de dano por 20 s.',
+      xSpeed: 'Mais velocidade e recargas menores por 20 s.',
+      maxRepel: 'Afasta os inimigos por 6 s.',
+      expShare: 'Puxa todas as balas de EXP do chão.',
+      pokeFlute: 'Põe os inimigos da tela para dormir por 6 s.',
+      revive: 'Levanta você com 50% de HP ao cair.',
+      rareCandy: 'Sobe um nível na hora.',
+      lantern: 'Luz maior até a escada.',
+      compass: 'Mostra a escada no minimapa até descer.',
+      fortune: '+50% de ₽ coletados até a escada.',
+    },
+  },
+
   /** TMs and the Move Tutor (`ui/tmPick.ts`, `game/tms.ts`). */
   tm: {
     titleBoss: (boss: string) => `${boss} deixou um TM!`,

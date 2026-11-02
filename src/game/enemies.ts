@@ -13,7 +13,7 @@ import { isSpitter, spitBand, spitterStride } from './spitters'
 import { CONFUSE_BUMP, CONFUSE_CONTACT, createStatus, isFrozen, statusAttack, statusPace } from './status'
 import { enemyGroundPace } from './terrain'
 import { createTraitState, isAirborne, traitPace } from './traits'
-import { dungeonNav, spaceAt } from './dungeon'
+import { dormant, dungeonNav, spaceAt } from './dungeon'
 import { CAVE } from '../data/places'
 import { PROCGEN } from '../data/procgen'
 import { underground } from './landmarks'
@@ -188,6 +188,8 @@ export const updateEnemies = (g: Game, dt: number) => {
     }
     // Versus: a Pokémon's avatar stands where its player does (`versusCombat.ts`), never on its own.
     if (e.behavior.kind === 'avatar') continue
+    // A cave room the team hasn't entered yet: its Pokémon stay put until someone steps in (or something alerts them).
+    if (cave && plan && e.alert <= 0 && dormant(plan, cave.state.visited, e.x - cave.x, e.y - cave.y)) continue
     // A hidden teammate (Dig, a tunnel) is passed over for one the foe can see.
     const p = nearestSeen(g, e.x, e.y)
     const lost = underground(g, p)

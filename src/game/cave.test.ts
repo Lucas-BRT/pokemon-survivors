@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { CAVE } from '../data/places'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { descendCave, updateCave } from './cave'
+import { updateAttacks } from './attacks'
+import { spawnAttack } from './spawn'
 import { chooseOffer, createGame, step } from './game'
 import { spawnEnemy } from './enemies'
-import { roomAt } from './dungeon'
+import { dormant, roomAt } from './dungeon'
 import { enterPlace } from './placeInterior'
 import { TICK } from './replay'
 import type { Game } from './types'
@@ -78,6 +80,8 @@ describe.skipIf(!PROCGEN.cave)('the generated cave at play', () => {
       updateCave(g, inside, TICK)
       const born = g.enemies.slice(before)
       expect(born.some((e) => e.kind === lead.kind)).toBe(plan.sizes[room]! >= lead.minCells)
+      // The leader takes the HP bar.
+      if (plan.sizes[room]! >= lead.minCells) expect(g.bossId).toBe(born.find((e) => e.kind === lead.kind)!.id)
       expect(born.filter((e) => e.kind !== lead.kind).every((e) => pack.mob.includes(e.kind))).toBe(true)
     }
   })
@@ -126,6 +130,11 @@ describe.skipIf(!PROCGEN.caveSight)('what the cave’s walkers see', () => {
     const { g, inside, plan, mid } = setup()
     const e = spawnEnemy(g, 'zubat', mid(plan.stairsRoom).x, mid(plan.stairsRoom).y)
     e.flash = 0.16
+    // A room the team has not entered sleeps, flash or not; it wakes once the team is in.
+    step(g, STILL, TICK)
+    expect(e.alert).toBe(0)
+    inside.state.visited.push(plan.stairsRoom)
+    e.flash = 0.16
     step(g, STILL, TICK)
     expect(e.alert).toBe(CAVE.sight.memory)
     const room = plan.ambush[0]!
@@ -144,5 +153,76 @@ describe.skipIf(!PROCGEN.caveSight)('what the cave’s walkers see', () => {
     const room = roomAt(plan, e.x - g.place.inside!.x, e.y - g.place.inside!.y)
     play(g, 3)
     expect(roomAt(plan, e.x - g.place.inside!.x, e.y - g.place.inside!.y)).toBe(room)
+  })
+})
+
+describe.skipIf(!PROCGEN.cave)('rooms and the rock at play', () => {
+  const midOf = (inside: ReturnType<typeof inCave>['inside'], i: number) => {
+    const r = inside.state.plan!.rooms[i]!
+    return { x: inside.x + r.x + r.w / 2, y: inside.y + r.y + r.h / 2 }
+  }
+
+  it('wakes a room’s Pokémon only once someone has entered it, and aims at none before', () => {
+    const { g, inside } = inCave(7)
+    const plan = inside.state.plan!
+    const far = plan.stairsRoom
+    expect(inside.state.visited).toEqual([plan.startRoom])
+    // A corner of the room, clear of the stairs that stand in it.
+    const at = { x: inside.x + plan.rooms[far]!.x + 6, y: inside.y + plan.rooms[far]!.y + 6 }
+    const e = spawnEnemy(g, 'rattata', at.x, at.y)
+    expect(dormant(plan, inside.state.visited, e.x - inside.x, e.y - inside.y)).toBe(true)
+    Object.assign(g.player, at)
+    updateCave(g, inside, TICK)
+    expect(inside.state.visited).toContain(far)
+    expect(dormant(plan, inside.state.visited, e.x - inside.x, e.y - inside.y)).toBe(false)
+  })
+
+  it('stops a shot at the rock unless it is a ghost or psychic one', () => {
+    const { g, inside } = inCave(7)
+    const plan = inside.state.plan!
+    const r = plan.rooms[plan.startRoom]!
+    const mid = midOf(inside, plan.startRoom)
+    Object.assign(g.player, mid)
+    // Straight out through the room's top wall, away from any corridor mouth.
+    const shoot = (type: 'fire' | 'ghost') => spawnAttack(g, { move: 'ember', type, visual: 'ember', x: inside.x + r.x + 6, y: inside.y + r.y + 6, shape: { kind: 'circle', r: 4 }, motion: { kind: 'linear', vx: 0, vy: -200 }, damage: 1, knockback: 0, ttl: 2 })
+    const fire = shoot('fire')
+    const ghost = shoot('ghost')
+    updateAttacks(g, 0.5)
+    expect(fire.age).toBeGreaterThanOrEqual(fire.ttl)
+    expect(ghost.age).toBeLessThan(ghost.ttl)
+  })
+})
+
+describe.skipIf(!PROCGEN.cave)('the dark’s spawns', () => {
+  it('never come into a room a player stands in', () => {
+    const { g, inside } = inCave(7)
+    const plan = inside.state.plan!
+    const r = plan.rooms[plan.startRoom]!
+    Object.assign(g.player, { x: inside.x + r.x + r.w / 2, y: inside.y + r.y + r.h / 2 })
+    // The start room is the only one visited and the player is in it: nothing may spawn, however long they stay.
+    for (let i = 0; i < 6000; i++) updateCave(g, inside, TICK)
+    expect(g.enemies.length).toBe(0)
+  })
+})
+
+describe.skipIf(!PROCGEN.cave)('the cave’s crystals', () => {
+  it('light up when a player walks up to them, and stay lit', () => {
+    const { g, inside } = inCave(7)
+    const [lx, ly] = inside.state.lights[0]!
+    const { rx, time, blink } = CAVE.crystal
+    expect(inside.state.touched).toEqual([])
+    // Near, but not against it: nothing.
+    Object.assign(g.player, { x: inside.x + lx + rx + 8, y: inside.y + ly })
+    updateCave(g, inside, TICK)
+    expect(inside.state.touched).toEqual([])
+    Object.assign(g.player, { x: inside.x + lx + rx - 3, y: inside.y + ly })
+    updateCave(g, inside, TICK)
+    expect(inside.state.touched.map((c) => c.i)).toContain(0)
+    // It keeps shining after the player walks off, then goes out.
+    Object.assign(g.player, { x: inside.x + lx + 400, y: inside.y + ly })
+    updateCave(g, inside, time - blink)
+    expect(inside.state.touched.map((c) => c.i)).toContain(0)
+    updateCave(g, inside, blink + 1)
+    expect(inside.state.touched).toEqual([])
   })
 })

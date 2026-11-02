@@ -193,6 +193,7 @@ export const createPlayer = (slot: number, setup: PlayerSetup, lucky: boolean, x
     branch: null,
     ability: createAbilityState(),
     curses: createCurseState(),
+    gems: 0,
     revives: 0,
     buffs: [],
     tm: createTmState(setup.tms),
@@ -699,7 +700,7 @@ const pickOffer = (g: Game, offer: Offer) => {
     decidePokeball(g, offer)
     return advancePhase(g)
   }
-  if (phase !== 'levelup' || offer.kind === 'form' || offer.kind === 'ability' || offer.kind === 'curse' || offer.kind === 'tm' || offer.kind === 'forget' || offer.kind === 'pass') return
+  if (phase !== 'levelup' || offer.kind === 'form' || offer.kind === 'ability' || offer.kind === 'curse' || offer.kind === 'tm' || offer.kind === 'forget' || offer.kind === 'ware' || offer.kind === 'pass') return
   // A fork opens its branches, except on the Arena kit's own screens (a move taking a slot's place at its level, `versusPacing.ts`).
   if (offer.kind === 'move' && forkAt(offer.id, offer.level) && !p.versus?.learn) {
     p.offers = branchOffers(offer)

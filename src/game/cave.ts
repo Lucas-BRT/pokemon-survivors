@@ -1,10 +1,13 @@
-import { clamp, TAU } from '../engine/math'
+import { clamp, retain, TAU } from '../engine/math'
 import { range, weightedPick } from '../engine/rng'
 import type { Circle, FloorPlan, Pt } from '../data/arenas'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import { CAVE, PLACE_FEET, PLACE_LOOT } from '../data/places'
+import { CAVE_SHOP } from '../data/caveShop'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { spawnAlpha } from './alphas'
+import { levelOf, levelsOf } from './caveLevel'
+import { drawNpc, openShop, type CaveShop } from './caveShop'
 import { dropItem } from './consumables'
 import { floorShapes, generateFloor, generateFloorV2, roomAt, type DungeonFloor, type Rect } from './dungeon'
 import { burst, shakeScreen } from './effects'
@@ -15,7 +18,7 @@ import { awardEgg, dropCoins, dropPickup } from './pickups'
 import { placePool, type PlaceInteriorOf } from './place'
 import { notifyPlace, solidAt, spawnInPlace, startLoot } from './placeKit'
 import { playerTypes, type Solid } from './terrain'
-import { anchorPlayer, centerScreen, placeTeam } from './players'
+import { actAs, anchorPlayer, centerScreen, phaseOf, placeTeam, playerWithin, standing } from './players'
 import type { Game, Player } from './types'
 import * as dm from '../engine/dmath'
 
@@ -44,6 +47,15 @@ export type CaveState = {
   /** The floor's ambush rooms (`DungeonFloor.ambush`) and the ones that have sprung. */
   ambush: readonly number[]
   sprung: number[]
+  /** Rooms (`DungeonFloor.rooms`) the team has entered: only their Pokémon are awake and their foes can be aimed at, as in the Mystery Dungeon games. */
+  visited: number[]
+  /** The floor's Cristalário (null in the chamber and on floors without one), and what the wares bought here do until the stairs. */
+  shop: CaveShop | null
+  lantern: boolean
+  compass: boolean
+  fortune: boolean
+  /** Crystals (indices into `lights`) a player touched, seconds they still shine (kept full while a foot stays on them) and since when they've been lit (`CAVE.crystal`): their glow and the light they give their room (`render/caveSight.ts`). */
+  touched: Array<{ i: number; left: number; age: number }>
 }
 
 type CaveInside = PlaceInteriorOf<'cave'>
@@ -54,12 +66,20 @@ const CHAMBER = { r: 120, chest: [0, -14] as Pt, start: [0, 94] as Pt, crystals:
 /** How far the acting player's light reaches: Fire types carry a flame, Electric types use Flash. */
 export const caveLight = (g: Game) => {
   const types = playerTypes(g)
-  return types.includes('fire') ? CAVE.fireLight : types.includes('electric') ? CAVE.electricLight : CAVE.light
+  const inside = g.place.inside
+  const lantern = inside?.id === 'cave' && inside.state.lantern ? CAVE_SHOP.lantern : 0
+  return (types.includes('fire') ? CAVE.fireLight : types.includes('electric') ? CAVE.electricLight : CAVE.light) + lantern
 }
 
-type Floor = { layout: FloorPlan; solids: Solid[]; start: Pt; plan: DungeonFloor | null; stairs: Pt | null; chest: CaveState['chest']; lights: readonly Pt[] }
+type Floor = { layout: FloorPlan; solids: Solid[]; start: Pt; plan: DungeonFloor | null; stairs: Pt | null; chest: CaveState['chest']; lights: readonly Pt[]; shop: CaveShop | null }
 
 /** Lays out floor `index` around world (x, y) and puts its items down: a pile of Poké and something from an item ball. */
+/** A floor layout the next `layFloor` uses instead of drawing one (the `?debug=` lab, `debugStart.ts`). */
+let staged: DungeonFloor | null = null
+export const stagePlan = (plan: DungeonFloor | null) => {
+  staged = plan
+}
+
 const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
   if (index >= CAVE.floors) {
     const lights = Array.from({ length: CHAMBER.crystals }, (_, i): Pt => {
@@ -78,18 +98,24 @@ const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
       stairs: null,
       chest: { x: CHAMBER.chest[0], y: CHAMBER.chest[1], progress: 0, open: false },
       lights,
+      shop: null,
     }
   }
-  const plan = PROCGEN.cave ? generateFloorV2(g.rng, index) : generateFloor(g.rng, index)
+  const plan = staged ?? (PROCGEN.cave ? generateFloorV2(g.rng, index) : generateFloor(g.rng, index))
+  staged = null
   plan.items.forEach(([ix, iy], i) => {
     if (i === 0) dropCoins(g, x + ix, y + iy, [COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[0], COIN_VALUES[0]])
     else dropItem(g, x + ix, y + iy, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
+    dropPickup(g, x + ix - 10, y + iy, 'gem')
   })
   // An ambush room's prize: a pile of ₽ and something from an item ball, for whoever dares.
   for (const [px, py] of plan.prizes) {
     dropCoins(g, x + px, y + py, [COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[0]])
     dropItem(g, x + px + 12, y + py, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
+    for (let i = 0; i < CAVE_SHOP.gemsPerPrize; i++) dropPickup(g, x + px - 12 + i * 8, y + py + 6, 'gem')
   }
+  const sanctuary = plan.sanctuary >= 0 ? plan.rooms[plan.sanctuary]! : null
+  const shop: CaveShop | null = sanctuary ? { npc: drawNpc(g.rng, index), x: dm.round(sanctuary.x + sanctuary.w / 2), y: dm.round(sanctuary.y + sanctuary.h / 2) + 6, stand: 0, sold: [] } : null
   return {
     layout: { floor: floorShapes(plan) },
     solids: [
@@ -101,10 +127,11 @@ const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
     stairs: plan.stairs,
     chest: null,
     lights: plan.crystals,
+    shop,
   }
 }
 
-const stateOf = (f: Floor, floor: number): CaveState => ({ floor, plan: f.plan, stairs: f.stairs, chest: f.chest, lights: f.lights, wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [] })
+const stateOf = (f: Floor, floor: number): CaveState => ({ floor, plan: f.plan, stairs: f.stairs, chest: f.chest, lights: f.lights, wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [], visited: f.plan ? [f.plan.startRoom] : [], shop: f.shop, lantern: false, compass: false, fortune: false, touched: [] })
 
 export const buildCave = (g: Game, x: number, y: number) => {
   const f = layFloor(g, x, y, 0)
@@ -120,6 +147,7 @@ export const descendCave = (g: Game, inside: CaveInside) => {
   const s = inside.state
   g.enemies = []
   g.hazards = []
+  g.bossId = null
   for (const k of g.pickups) k.attracted = true
   const f = layFloor(g, inside.x, inside.y, s.floor + 1)
   const start = f.start
@@ -154,6 +182,9 @@ const inLight = (g: Game, x: number, y: number) => {
 }
 
 /** A spot in the dark: in some room (or around the chamber), past every player's light but close enough to come for one of them (they take turns, `anchorPlayer`). */
+/** The clock of the floor the team is on, in seconds. */
+const floorTime = (inside: CaveInside) => CAVE_GEN.floorTime[Math.min(inside.state.floor, CAVE_GEN.floorTime.length - 1)]!
+
 const darkSpot = (inside: CaveInside) => (g: Game) => {
   const plan = inside.state.plan
   const p = anchorPlayer(g)
@@ -161,10 +192,25 @@ const darkSpot = (inside: CaveInside) => (g: Game) => {
     let x: number
     let y: number
     if (plan) {
-      const r = plan.rooms[Math.floor(g.rng() * plan.rooms.length)]!
+      // Never in the Cristalário (its dweller is at peace), nor in a room a player stands in: foes there come from the dark, not out of nowhere.
+      const there = g.players.map((q) => roomAt(plan, q.x - inside.x, q.y - inside.y))
+      const seen = inside.state.visited.filter((room) => room !== plan.sanctuary && !there.includes(room))
+      if (seen.length === 0) return null
+      const room = seen[Math.floor(g.rng() * seen.length)]!
+      // The brighter the room, the fewer foes the dark sends into it, and fewer still in rooms already explored, growing as the floor's clock runs down.
+      const { explored, ramp } = CAVE_GEN.spawn
+      const level = levelsOf(plan, inside.state.touched.map((c) => c.i), CAVE.lit)[room]!
+      const calm = dm.sq(1 - level / CAVE.lit.max)
+      const lingered = PROCGEN.cave ? 1 + (ramp * (floorTime(inside) - inside.left)) / floorTime(inside) : 1
+      if (g.rng() >= explored * calm * lingered) continue
+      const r = plan.rooms[room]!
       x = inside.x + range(g.rng, r.x + 14, r.x + r.w - 14)
       y = inside.y + range(g.rng, r.y + 14, r.y + r.h - 14)
     } else {
+      // The treasure chamber: the same rule, with its crystals' light spread over the whole cavern.
+      const { explored } = CAVE_GEN.spawn
+      const level = levelOf(inside.state.touched.length, Math.PI * CHAMBER.r * CHAMBER.r, CAVE.lit)
+      if (g.rng() >= explored * dm.sq(1 - level / CAVE.lit.max)) continue
       const a = range(g.rng, 0, TAU)
       const d = range(g.rng, 40, CHAMBER.r - 16)
       x = inside.x + dm.cos(a) * d
@@ -221,6 +267,8 @@ const springAmbush = (g: Game, inside: CaveInside, room: Rect, cells: number, by
   if (lead && cells >= lead.minCells) {
     const boss = lead.alpha ? spawnAlpha(g, lead.kind, cx, cy) : spawnEnemy(g, lead.kind, cx, cy)
     boss.alert = CAVE.sight.ambush
+    // The room's leader takes the HP bar, as a wave boss does (it clears when it falls or the team goes down the stairs).
+    g.bossId = boss.id
   }
   shakeScreen(g, 4, { x: cx, y: cy })
   notifyPlace(g, 'cave', { kind: 'monsterHouse' })
@@ -263,14 +311,42 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
     s.wind++
     notifyPlace(g, 'cave', { kind: 'wind', level: s.wind })
   }
-  // The first player into an ambush room springs its pack.
+  // A room the team steps into is theirs to face: its Pokémon wake. The first player into an ambush room springs its pack.
   const plan = s.plan
   if (plan) {
     for (const p of g.players) {
       const room = roomAt(plan, p.x - inside.x, p.y - inside.y)
+      if (room >= 0 && !s.visited.includes(room)) s.visited.push(room)
       if (room < 0 || !s.ambush.includes(room) || s.sprung.includes(room)) continue
       s.sprung.push(room)
       springAmbush(g, inside, plan.rooms[room]!, plan.sizes[room]!, p)
+    }
+  }
+  // A crystal a player's foot touches lights up for a while and then goes out (touching it again lights it afresh).
+  for (const c of s.touched) {
+    c.left -= dt
+    c.age += dt
+  }
+  retain(s.touched, (c) => c.left > 0)
+  const { rx, ry, time } = CAVE.crystal
+  s.lights.forEach(([lx, ly], i) => {
+    if (!g.players.some((p) => standing(g, p) && dm.sq((p.x - inside.x - lx) / rx) + dm.sq((p.y - inside.y - ly) / ry) <= 1)) return
+    const lit = s.touched.find((c) => c.i === i)
+    if (lit) lit.left = time
+    else s.touched.push({ i, left: time, age: 0 })
+  })
+  // Standing in the Cristalário's ring opens the sheet for whoever stands there.
+  const shop = s.shop
+  if (shop) {
+    const sx = inside.x + shop.x
+    const sy = inside.y + shop.y
+    const guest = playerWithin(g, sx, sy, CAVE_SHOP.radius, true)
+    shop.stand = Math.max(0, Math.min(CAVE_SHOP.stand, shop.stand + (guest ? dt : -dt)))
+    if (shop.stand >= CAVE_SHOP.stand && guest && phaseOf(g, guest) === 'playing') {
+      const before = actAs(g, guest)
+      openShop(g, shop)
+      actAs(g, before)
+      shop.stand = 0
     }
   }
   // Any player at the stairs takes the team down; any player at the chest opens it.

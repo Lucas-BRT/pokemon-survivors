@@ -1,3 +1,4 @@
+import { CAVE_NPCS } from '../data/caveShop'
 import { domainOf, partnerOf } from '../data/domains'
 import { ENEMIES, type EnemyId } from '../data/enemies'
 import { GRAVEYARD } from '../data/places'
@@ -77,10 +78,19 @@ const riftCameo = (g: Game): Dex[] => {
   return cameo ? [cameo.dex] : []
 }
 
+/** The dweller of this cave floor's Cristalário, if there is one. */
+const caveDweller = (g: Game) => {
+  const inside = g.place.inside
+  const shop = inside?.id === 'cave' ? inside.state.shop : null
+  return shop ? { dex: CAVE_NPCS[shop.npc].dex, shiny: shop.npc === 'sableyeShiny' } : null
+}
+
 /** A place's dwellers (the ones its pool has now) once its entrance opens, Spiritomb with the graveyard's, and the reaper as its hunt nears in the endless mode. */
 const visitors = (g: Game): Dex[] => {
   const place = g.place.inside?.id ?? g.place.entrance?.id
+  const dweller = caveDweller(g)
   return [
+    ...(dweller ? [dweller.dex] : []),
     ...(place ? placePool(place, g.time).map(([id]) => ENEMIES[id].dex) : []),
     ...(place === 'graveyard' ? [ENEMIES[GRAVEYARD.boss].dex] : []),
     ...(g.endless && g.time >= ENDLESS.reaperAt - REAPER_LEAD ? [ENEMIES[REAPER].dex] : []),
@@ -155,5 +165,8 @@ export const runSprites = (g: Game, needs: readonly SpriteNeed[], always: readon
       order.push(called)
     }
   }
-  return { stream: order.map((dex) => ({ dex, shiny: false })), extras: [...playerForms(g), ...bossForms(g)], keep: { species, variants } }
+  // The Cristalário's dweller, in its colors (the shiny Sableye's shiny sheet).
+  const dweller = caveDweller(g)
+  if (dweller?.shiny) variants.add(dweller.dex)
+  return { stream: order.map((dex) => ({ dex, shiny: false })), extras: [...(dweller?.shiny ? [{ dex: dweller.dex, shiny: true }] : []), ...playerForms(g), ...bossForms(g)], keep: { species, variants } }
 }

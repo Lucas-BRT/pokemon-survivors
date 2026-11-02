@@ -1904,6 +1904,45 @@ export const fr: Messages = {
     specialNote: 'À l’évolution, l’attaque spéciale devient celle de la forme choisie.',
   },
 
+  /** The cave's Cristalário (`data/caveShop.ts`, `ui/caveShop.ts`). */
+  caveShop: {
+    title: (npc: string) => `Salle de cristaux de ${npc}`,
+    sub: 'Articles pour cette partie seulement : certains durent jusqu’à l’escalier.',
+    wallet: (coins: string, gems: number) => `Vous avez ${coins} et ${gems} gemmes`,
+    gems: (n: number) => `${n} gemmes`,
+    broke: 'Il manque des ₽ ou des gemmes',
+    leave: 'Partir',
+    soldOut: 'Épuisé',
+    bought: (name: string) => `Acheté : *${name}* !`,
+    stone: 'Pierre d’évolution : à vous jusqu’à la fin de la partie.',
+    seen: (npc: string) => `Un ${npc} vend des articles dans cette salle de cristaux !`,
+    shinySeen: 'Un Sableye chromatique ! Il vend des pierres d’évolution.',
+    names: { lantern: 'Lanterne', compass: 'Boussole', fortune: 'Fortune' },
+    lines: {
+      clefairy: 'Hihi~ jolis cristaux, jolis prix !',
+      chansey: 'Blessé ? Faites comme chez vous.',
+      shuckle: 'Jus de baie tout frais, aujourd’hui seulement !',
+      nosepass: 'Je suis le nord. Voulez-vous savoir où est la sortie ?',
+      lunatone: 'La lune guide ceux qui marchent dans le noir.',
+      sableye: 'Hihi… des gemmes ? Je les échange contre du concret.',
+      sableyeShiny: 'Psst… pierres rares, que du meilleur. Des gemmes, s’il vous plaît.',
+    },
+    wares: {
+      potion: 'Rend 30 PV.',
+      superPotion: 'Rend 60 PV.',
+      xAttack: '+50 % de dégâts pendant 20 s.',
+      xSpeed: 'Plus de vitesse et des recharges plus courtes pendant 20 s.',
+      maxRepel: 'Repousse les ennemis pendant 6 s.',
+      expShare: 'Attire tous les bonbons d’EXP au sol.',
+      pokeFlute: 'Endort les ennemis à l’écran pendant 6 s.',
+      revive: 'Vous relève avec 50 % de PV à la chute.',
+      rareCandy: 'Gagne un niveau tout de suite.',
+      lantern: 'Une lumière plus large jusqu’à l’escalier.',
+      compass: 'Montre l’escalier sur la minicarte jusqu’à la descente.',
+      fortune: '+50 % de ₽ ramassés jusqu’à l’escalier.',
+    },
+  },
+
   /** TMs and the Move Tutor (`ui/tmPick.ts`, `game/tms.ts`). */
   tm: {
     titleBoss: (boss: string) => `${boss} a laissé une CT !`,

@@ -38,7 +38,13 @@ export type CavePack = {
 
 /** The generated cave's numbers (`game/dungeon.ts` `generateFloorV2`, `game/cave.ts`), by floor (the last entry serves the floors after it). */
 export const CAVE_GEN = {
-  /** Cells of rooms per floor; each cell is `DUNGEON.cell` px. */
+  /**
+   * A cell's size and the px a room keeps from its edges, so two rooms are at least `2 * gap` apart: a corridor
+   * at least that long, more than the player's light reaches (`CAVE.light`), which can't spill into the next room.
+   */
+  cell: { w: 270, h: 230 },
+  gap: 56,
+  /** Cells of rooms per floor; each cell is `cell` px. */
   grids: [{ cols: 4, rows: 3 }, { cols: 4, rows: 4 }, { cols: 5, rows: 4 }],
   /** Big rooms per floor, and the shapes they may take (cells wide × cells tall): the ambush rooms are chosen among them. */
   big: [2, 3, 3],
@@ -66,6 +72,12 @@ export const CAVE_GEN = {
   wind: [30, 15, 6],
   /** Extra spawn rate per floor down (a share of the first floor's). */
   spawnPerFloor: 0.2,
+  /**
+   * The dark's spawns in rooms already entered, by how lit they are (`darkSpot` in `game/cave.ts`): a spot in a room is taken with
+   * chance `explored × (1 − L/max)²`, so a lit room spawns far less (none at the most light the crystals give), and `ramp` is how
+   * many times more it grows over a floor's clock: a team that lingers still draws new foes, slowly.
+   */
+  spawn: { explored: 0.2, ramp: 1 },
   /** The ambush packs by floor: many weak ones up top, a leader with its own below. Never more than `packMax` in all. */
   packs: [
     { mob: ['zubat', 'diglett', 'geodude'], base: 6, perCell: 3, leader: null },

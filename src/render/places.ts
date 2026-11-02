@@ -1,11 +1,14 @@
+import { CAVE_NPCS, CAVE_SHOP } from '../data/caveShop'
+import type { CaveShop } from '../game/caveShop'
+import { drawPokemon, loadedSprites } from './sprites'
 import { blitCentered, blitEllipse, blitRotated, canvasCache, context2d, createCanvas, lazy, onCanvasReset, type PixelSprite } from '../engine/pixelart'
 import { TAU } from '../engine/math'
 import { hash2 } from '../engine/rng'
 import type { ArenaShape, FloorPlan, Pt } from '../data/arenas'
-import { CAVE, GRAVEYARD, PLACE, PLACES, SKY, type PlaceId, type WingId } from '../data/places'
+import { GRAVEYARD, PLACE, PLACES, SKY, type PlaceId, type WingId } from '../data/places'
 import { fits } from '../game/arenaFloor'
-import { caveLight } from '../game/cave'
-import { caveFog, SEEN_SCALE, wasSeen } from './caveSight'
+import { dormant } from '../game/dungeon'
+import { drawCaveDark } from './caveDark'
 import type { PlaceEntrance, PlaceInterior, PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
 import { art, toIconUrl } from './art'
@@ -127,7 +130,8 @@ const bakeCave = (floor: readonly ArenaShape[]): Baked => {
     let k = 0
     for (let d = 1; d <= FACE && !k; d++) if (!r.at(px, py - d)) k = d
     if (k) {
-      const crack = hash2(Math.floor(x / 3), 0, 9) < 0.12 && k > 2
+      // One px wide and rare: wider cracks ran together into black blocks on a corridor's narrow wall.
+      const crack = hash2(x, 0, 9) < 0.05 && k > 2
       const strata = (k + Math.floor(hash2(Math.floor(x / 7), 1, 5) * 2)) % 3 === 0
       return crack ? '#1e1814' : CAVE_FACE[Math.min(FACE - 1, k - 1 + (strata ? 1 : 0))]!
     }
@@ -345,6 +349,25 @@ const STAIRS = lazy(() =>
   ),
 )
 
+/** The Cristalário's dweller at ease in its ring (the ring fills as someone stands in it); the shiny Sableye glints. */
+const drawCaveNpc = (ctx: Ctx, x: number, y: number, shop: CaveShop, t: number) => {
+  dashedRing(ctx, x, y - 2, CAVE_SHOP.radius, t * 1.2, ['#c8f0ff', '#58a8d8'], 0.3)
+  if (shop.stand > 0) chargeArc(ctx, x, y - 2, CAVE_SHOP.radius, shop.stand / CAVE_SHOP.stand)
+  const shiny = shop.npc === 'sableyeShiny'
+  const s = loadedSprites(CAVE_NPCS[shop.npc].dex, shiny)
+  if (!s) return
+  blitEllipse(ctx, Math.max(4, Math.round(s.bodyW * 0.36)), 3, 'rgba(0,0,0,0.3)', x, y)
+  drawPokemon(ctx, s, 'Idle', 0, t, x, y)
+  if (shiny) {
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.9 + i / 3) % 1
+      if (ph > 0.4) continue
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(Math.round(x - 10 + i * 10 + Math.sin(t * 3 + i) * 2), Math.round(y - s.bodyH - 2 - ph * 8), 1, 1)
+    }
+  }
+}
+
 /** Ground-level parts of a place: the stairs and the chest's ring, the keystone's spirit count. */
 export const drawPlaceGround = (ctx: Ctx, g: Game, t: number) => {
   const inside = g.place.inside
@@ -363,6 +386,7 @@ export const drawPlaceGround = (ctx: Ctx, g: Game, t: number) => {
       ctx.fillStyle = '#ffffff'
       if (k < 10) ctx.fillRect(Math.round(x - 5 + k), Math.round(y - 4 + k * 0.9), 2, 1)
     }
+    if (s.shop) drawCaveNpc(ctx, inside.x + s.shop.x, inside.y + s.shop.y, s.shop, t)
     const c = s.chest
     if (c && !c.open && c.progress > 0) chargeArc(ctx, inside.x + c.x, inside.y + c.y, 24, c.progress)
     return
@@ -506,76 +530,15 @@ export const darkLayer = (w: number, h: number) => {
 
 const EYES = '#f8f0a0'
 
-/**
- * The cave's dark over everything: light around the player (wider for Fire and
- * Electric types, flickering with a flame), around crystals, the stairs, the
- * chest and fire or electric attacks. Wild Pokémon out in the dark show only
- * their eyes. The graveyard gets a lighter night.
- */
-export const drawPlaceDark = (ctx: Ctx, g: Game, camX: number, camY: number, t: number) => {
-  const inside = g.place.inside
-  if (!inside || inside.id === 'sky') return
+/** Eyes in the cave's dark: whatever is awake and stands outside every light (`litBy`) blinks two pale dots. */
+const drawCaveEyes = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>, litBy: ReadonlyArray<readonly [number, number, number]>, camX: number, camY: number, t: number) => {
   const { w, h } = g.view
-  const layer = darkLayer(w, h)
-  const d = layer.ctx
-  d.globalCompositeOperation = 'source-over'
-  d.clearRect(0, 0, w, h)
-  d.fillStyle = inside.id === 'cave' ? 'rgba(6,4,10,0.985)' : 'rgba(14,8,30,0.5)'
-  d.fillRect(0, 0, w, h)
-  d.globalCompositeOperation = 'destination-out'
-  // The cave floor's seen part: where the team's light has been, which stays faintly known; the rest stays black.
-  const plan = inside.id === 'cave' ? inside.state.plan : null
-  const seen = plan ? caveFog(g, plan) : null
-  if (seen) {
-    d.fillStyle = 'rgba(0,0,0,0.17)'
-    const S = SEEN_SCALE
-    for (let my = Math.floor(camY / S); my <= Math.floor((camY + h) / S); my++) {
-      for (let mx = Math.floor(camX / S); mx <= Math.floor((camX + w) / S); mx++) {
-        if (seen.has((mx & 0xffff) * 0x10000 + (my & 0xffff))) d.fillRect(Math.round(mx * S - camX), Math.round(my * S - camY), S, S)
-      }
-    }
-  }
-  const cut = (x: number, y: number, r: number) => {
-    const disc = lightDisc(Math.max(4, Math.round(r)))
-    d.drawImage(disc, Math.round(x - camX - disc.width / 2), Math.round(y - camY - disc.height / 2))
-  }
-  const p = g.player
-  const reach = inside.id === 'cave' ? caveLight(g) : 110
-  // A flame flickers.
-  const flicker = inside.id === 'cave' && reach === CAVE.fireLight ? Math.round(Math.sin(t * 9) + Math.sin(t * 23)) : 0
-  cut(p.x, p.y - 10, reach + flicker)
-  const litBy: Array<readonly [number, number, number]> = [[p.x, p.y - 10, reach * 0.8]]
-  if (inside.id === 'cave') {
-    const s = inside.state
-    // A glow only shows once the light has reached it: crystals, stairs and chest of rooms not visited yet stay black.
-    for (const [lx, ly] of s.lights) {
-      if (seen && !wasSeen(seen, inside.x + lx, inside.y + ly)) continue
-      cut(inside.x + lx, inside.y + ly - 6, 34 + Math.round(Math.sin(t * 2 + lx) * 1.5))
-      litBy.push([inside.x + lx, inside.y + ly - 6, 26])
-    }
-    if (s.stairs && (!seen || wasSeen(seen, inside.x + s.stairs[0], inside.y + s.stairs[1]))) cut(inside.x + s.stairs[0], inside.y + s.stairs[1], 24 + Math.round(Math.sin(t * 3) * 2))
-    if (s.chest && (!seen || wasSeen(seen, inside.x + s.chest.x, inside.y + s.chest.y))) cut(inside.x + s.chest.x, inside.y + s.chest.y - 6, 30)
-    let n = 0
-    for (const a of g.attacks) {
-      if (n > 24 || a.age < 0 || (a.type !== 'fire' && a.type !== 'electric')) continue
-      if (a.x < camX - 20 || a.y < camY - 20 || a.x > camX + w + 20 || a.y > camY + h + 20) continue
-      cut(a.x, a.y - 6, 16)
-      n++
-    }
-  } else {
-    // The keystone glows with the spirits it holds.
-    const s = inside.state
-    if (s.bossId === null) cut(inside.x + s.keystone[0], inside.y + s.keystone[1] - 12, 22 + Math.round((s.spirits / GRAVEYARD.spirits) * 22 + Math.sin(t * 3) * 2))
-  }
-  d.globalCompositeOperation = 'source-over'
-  ctx.drawImage(layer.canvas, 0, 0)
-  if (inside.id !== 'cave') return
-  // Eyes in the dark.
+  const plan = inside.state.plan
   for (const e of g.enemies) {
     if (e.dying >= 0 || e.x < camX - 8 || e.y < camY - 8 || e.x > camX + w + 8 || e.y > camY + h + 40) continue
     if (litBy.some(([lx, ly, r]) => (e.x - lx) ** 2 + (e.y - 10 - ly) ** 2 < r * r)) continue
-    // Eyes only where the team has been: nothing of the rooms still unseen.
-    if (seen && !wasSeen(seen, e.x, e.y)) continue
+    // Eyes only of the awake: the rooms nobody has entered show nothing.
+    if (plan && dormant(plan, inside.state.visited, e.x - inside.x, e.y - inside.y)) continue
     // A blink now and then.
     if (hash2(e.id, Math.floor(t * 2.5), 5) < 0.12) continue
     const def: EnemyDef = ENEMIES[e.kind]
@@ -586,6 +549,37 @@ export const drawPlaceDark = (ctx: Ctx, g: Game, camX: number, camY: number, t: 
     ctx.fillRect(Math.round(e.x - camX - 2 + facing), top - camY, 1, 1)
     ctx.fillRect(Math.round(e.x - camX + 2 + facing), top - camY, 1, 1)
   }
+}
+
+/**
+ * A place's dark over everything. The cave's is one field (`caveDark.ts`); the
+ * graveyard gets a lighter night with the keystone's glow.
+ */
+export const drawPlaceDark = (ctx: Ctx, g: Game, camX: number, camY: number, t: number) => {
+  const inside = g.place.inside
+  if (!inside || inside.id === 'sky') return
+  if (inside.id === 'cave') {
+    drawCaveEyes(ctx, g, inside, drawCaveDark(ctx, g, inside, camX, camY, t), camX, camY, t)
+    return
+  }
+  const { w, h } = g.view
+  const d = darkLayer(w, h).ctx
+  d.globalCompositeOperation = 'source-over'
+  d.clearRect(0, 0, w, h)
+  d.fillStyle = 'rgba(14,8,30,0.5)'
+  d.fillRect(0, 0, w, h)
+  d.globalCompositeOperation = 'destination-out'
+  const cut = (x: number, y: number, r: number) => {
+    const disc = lightDisc(Math.max(4, Math.round(r)))
+    d.drawImage(disc, Math.round(x - camX - disc.width / 2), Math.round(y - camY - disc.height / 2))
+  }
+  const p = g.player
+  cut(p.x, p.y - 10, 110)
+  // The keystone glows with the spirits it holds.
+  const s = inside.state
+  if (s.bossId === null) cut(inside.x + s.keystone[0], inside.y + s.keystone[1] - 12, 22 + Math.round((s.spirits / GRAVEYARD.spirits) * 22 + Math.sin(t * 3) * 2))
+  d.globalCompositeOperation = 'source-over'
+  ctx.drawImage(darkLayer(w, h).canvas, 0, 0)
 }
 
 /* ---------------- Entrances on the map ---------------- */

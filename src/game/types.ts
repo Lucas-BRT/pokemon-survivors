@@ -1,3 +1,4 @@
+import type { WareId } from '../data/caveShop'
 import type { Dir8 } from '../engine/math'
 import type { SeededRng } from '../engine/rng'
 import type { Grid } from '../engine/spatial'
@@ -116,6 +117,8 @@ export type Player = {
   level: number
   xp: number
   xpNext: number
+  /** Gems found in the cave (ambush prizes, item spots): the Cristalário's dearer wares ask for them. Kept for the run. */
+  gems: number
   /** Seconds of invulnerability left after being hit. */
   iframes: number
   hurt: number
@@ -567,7 +570,7 @@ export type Pickup = {
   to?: number
   /** Co-op: dropped for this slot alone (their Mega Stone, legendary TM, a boss's TM or Poké Ball); unset means anyone's. */
   owner?: number
-} & ({ kind: 'xp'; value: number } | { kind: 'coin'; value: number } | { kind: 'berry' } | { kind: 'pokeball' } | { kind: 'megaStone'; mega: MegaId } | { kind: 'consumable'; item: ConsumableId } | { kind: 'tm'; move: MoveId; source: TmSource } | { kind: 'alphaPrize' } | { kind: 'treat' } | { kind: 'evoItem'; item: EvoItemId })
+} & ({ kind: 'xp'; value: number } | { kind: 'coin'; value: number } | { kind: 'berry' } | { kind: 'pokeball' } | { kind: 'megaStone'; mega: MegaId } | { kind: 'consumable'; item: ConsumableId } | { kind: 'tm'; move: MoveId; source: TmSource } | { kind: 'alphaPrize' } | { kind: 'treat' } | { kind: 'evoItem'; item: EvoItemId } | { kind: 'gem' })
 
 export type Particle = {
   x: number
@@ -627,6 +630,8 @@ export type Offer =
   | { kind: 'duo'; to: MoveId; from: readonly [MoveId, MoveId] }
   /** A locked chest's cursed item (`curses.ts`): take it, or leave it there. */
   | { kind: 'curse'; id: CurseId; take: boolean }
+  /** A Cristalário ware (`game/caveShop.ts`) for `price` run ₽ and `gems`; buying it leaves the sheet open for the next. */
+  | { kind: 'ware'; id: WareId; price: number; gems: number }
 
 /** A TM's move to learn (or raise to `level` if owned), from a disc, a Move Tutor (for `price` run ₽) or a rift legendary. */
 export type TmOffer = { kind: 'tm'; id: MoveId; level: number; source: TmSource; price: number }

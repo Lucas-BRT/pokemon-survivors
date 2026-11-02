@@ -274,6 +274,9 @@ export const offerView = (g: Game, offer: Offer) => {
       const def: MoveDef = MOVES[offer.id]
       return { icon: moveIcon(offer.id), name: def.name, tag: m.tm.tag, isNew: offer.kind === 'tm', desc: m.moves[offer.id].description, type: def.type, fork: false, mods: NO_MODS }
     }
+    // The Cristalário has a sheet of its own (`ui/caveShop.ts`); this is its plain row.
+    case 'ware':
+      return { icon: berryIcon(), name: offer.id, tag: '', isNew: false, desc: '', type: null, fork: false, mods: NO_MODS }
     case 'pass':
       return { icon: berryIcon(), name: m.tm.pass, tag: '', isNew: false, desc: '', type: null, fork: false, mods: NO_MODS }
   }

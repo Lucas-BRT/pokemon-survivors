@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createRng } from '../engine/rng'
 import { fits, keepOn } from './arenaFloor'
 import { CAVE_GEN } from '../data/procgen'
-import { dungeonNav, floorShapes, generateFloor, generateFloorV2, roomAt, roomDistances, type DungeonFloor } from './dungeon'
+import { DUNGEON, dungeonNav, floorShapes, generateFloor, generateFloorV2, roomAt, roomDistances, type DungeonFloor } from './dungeon'
 
 const floors = (index: number) => Array.from({ length: 40 }, (_, seed) => generateFloor(createRng(seed + 1), index))
 
@@ -166,5 +166,49 @@ describe('generateFloorV2', () => {
     }
     expect(generateFloorV2(createRng(9), 2)).toEqual(generateFloorV2(createRng(9), 2))
     expect(generateFloorV2(createRng(9), 2)).not.toEqual(generateFloorV2(createRng(10), 2))
+  })
+})
+
+describe('generateFloorV2 corridors', () => {
+  const v2 = (index: number) => Array.from({ length: 40 }, (_, seed) => generateFloorV2(createRng(seed + 1), index))
+
+  it('keeps rooms apart by more than the player’s light reaches, and runs most corridors straight', () => {
+    let links = 0
+    let straight = 0
+    for (const index of [0, 1, 2]) {
+      for (const f of v2(index)) {
+        for (const l of f.links) {
+          const [a, b] = [f.rooms[l.a]!, f.rooms[l.b]!]
+          const across = l.path[1]![0] !== l.path[0]![0]
+          const gapPx = across ? b.x - (a.x + a.w) : b.y - (a.y + a.h)
+          expect(gapPx).toBeGreaterThanOrEqual(2 * CAVE_GEN.gap - 1)
+          links++
+          if (across ? l.path[0]![1] === l.path[3]![1] : l.path[0]![0] === l.path[3]![0]) straight++
+        }
+        for (const p of f.crystals) expect(onFloor(f, p, 4)).toBe(true)
+      }
+    }
+    expect(straight / links).toBeGreaterThan(0.8)
+  })
+
+  it('lights the long straight corridors with crystals', () => {
+    const f = v2(1).find((x) => x.crystals.some((c) => roomAt(x, ...c) < 0))
+    expect(f).toBeDefined()
+  })
+
+  it('never leaves a room flush with its corner: the corridor keeps wall on both sides of its door', () => {
+    for (const index of [0, 1, 2]) {
+      for (const f of v2(index)) {
+        for (const l of f.links) {
+          const across = l.path[1]![0] !== l.path[0]![0]
+          for (const [end, room] of [[l.path[0]!, l.a], [l.path[l.path.length - 1]!, l.b]] as const) {
+            const r = f.rooms[room]!
+            const c = across ? end[1] : end[0]
+            const [lo, hi] = across ? [r.y, r.y + r.h] : [r.x, r.x + r.w]
+            expect(Math.min(c - lo, hi - c)).toBeGreaterThanOrEqual(DUNGEON.corridor / 2 + 12)
+          }
+        }
+      }
+    }
   })
 })

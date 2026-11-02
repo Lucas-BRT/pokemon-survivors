@@ -1,3 +1,4 @@
+import { CAVE_SHOP } from '../data/caveShop'
 import { dirTo, retain } from '../engine/math'
 import { range } from '../engine/rng'
 import { healPlayer } from './combat'
@@ -142,12 +143,19 @@ const collect = (g: Game, pickup: Pickup) => {
       break
     case 'coin': {
       // Co-op ₽ are worth a bit more: the team's total is split at the end (`coopPayout`).
-      const amount = dm.round(pickup.value * p.stats.greed * coopScale(g, COOP.scale.coins))
+      const inside = g.place.inside
+      const fortune = inside?.id === 'cave' && inside.state.fortune ? 1 + CAVE_SHOP.fortune : 1
+      const amount = dm.round(pickup.value * p.stats.greed * coopScale(g, COOP.scale.coins) * fortune)
       g.coins += amount
       floatText(g, p.x, p.y - 30, `₽${amount}`, '#f8d030')
       g.events.push({ kind: 'coin' })
       break
     }
+    case 'gem':
+      p.gems++
+      floatText(g, p.x, p.y - 30, '◆', '#88e0f8')
+      g.events.push({ kind: 'coin' })
+      break
     case 'berry': {
       const heal = dm.round(healPlayer(g, p.stats.maxHp * 0.3))
       floatText(g, p.x, p.y - 30, `+${heal}`, '#58e858')

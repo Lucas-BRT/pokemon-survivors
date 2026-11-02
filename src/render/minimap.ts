@@ -338,7 +338,7 @@ const drawGround = (ctx: Ctx, v: View, base: string, dither: string, seed: numbe
 
 /* ---------------- Rooms ---------------- */
 
-const fillShape = (ctx: Ctx, v: View, room: Room, s: ArenaShape, grow = 0) => {
+const fillShape = (ctx: Ctx, v: View, room: Room, s: ArenaShape, grow = 0, tall = false) => {
   if (s.kind === 'circle') return fillEllipse(ctx, v, room.x + s.x, room.y + s.y, s.r + grow, s.r + grow)
   // A convex polygon, a row at a time.
   const pts = s.pts.map(([x, y]) => [(room.x + x) / v.scale - v.ox, (room.y + y) / v.scale - v.oy] as const)
@@ -355,17 +355,19 @@ const fillShape = (ctx: Ctx, v: View, room: Room, s: ArenaShape, grow = 0) => {
       x0 = Math.min(x0, x)
       x1 = Math.max(x1, x)
     }
-    if (x1 > x0) ctx.fillRect(Math.round(x0 - grow / v.scale), py, Math.round(x1 - x0 + (2 * grow) / v.scale), 1)
+    // A cave's rim also runs along its north and south walls (`tall`): rows past the shape's top and bottom.
+    const up = tall ? Math.round(grow / v.scale) : 0
+    if (x1 > x0) ctx.fillRect(Math.round(x0 - grow / v.scale), py - up, Math.round(x1 - x0 + (2 * grow) / v.scale), 1 + 2 * up)
   }
 }
 
 /** A room's floor: its rim, the floor, then deep and shallow water and lava. */
-const drawRoom = (ctx: Ctx, v: View, room: Room) => {
+const drawRoom = (ctx: Ctx, v: View, room: Room, tall = false) => {
   ctx.fillStyle = ROOM_LOOK.void
   ctx.fillRect(0, 0, S, S)
   const plan: FloorPlan = room.layout
   ctx.fillStyle = ROOM_LOOK.edge
-  for (const s of plan.floor) fillShape(ctx, v, room, s, v.scale)
+  for (const s of plan.floor) fillShape(ctx, v, room, s, v.scale, tall)
   ctx.fillStyle = ROOM_LOOK.floor
   for (const s of plan.floor) fillShape(ctx, v, room, s)
   ctx.fillStyle = ROOM_LOOK.shallow
@@ -464,16 +466,16 @@ export const drawMinimap = (ctx: Ctx, g: Game, shape: MinimapShape, t: number) =
   ctx.globalAlpha = 1
 
   if (room) {
-    drawRoom(ctx, v, room)
+    drawRoom(ctx, v, room, g.place.inside?.id === 'cave')
     const inside = g.place.inside
     // A cave floor is a maze to find the way through: only what the team has lit shows, the stairs once seen.
-    const seen = inside?.id === 'cave' && inside.state.plan ? caveFog(g, inside.state.plan) : null
+    const seen = inside?.id === 'cave' && inside.state.plan ? caveFog(g, inside.state.plan, inside.state.visited, inside.x, inside.y) : null
     if (seen) drawFog(ctx, v, seen)
     const stairs = inside?.id === 'cave' ? inside.state.stairs : null
     if (inside && stairs) {
       const sx = inside.x + stairs[0]
       const sy = inside.y + stairs[1]
-      if (!seen || seen.has(fogKey(Math.floor(sx / scale), Math.floor(sy / scale)))) marker(ctx, v, shape, art.stairs, sx, sy, true)
+      if (!seen || (inside.id === 'cave' && inside.state.compass) || seen.has(fogKey(Math.floor(sx / scale), Math.floor(sy / scale)))) marker(ctx, v, shape, art.stairs, sx, sy, true)
     }
     if (inside?.id === 'cave' && inside.state.chest && !inside.state.chest.open) marker(ctx, v, shape, art.events.chest, inside.x + inside.state.chest.x, inside.y + inside.state.chest.y, true)
     if (inside?.id === 'graveyard') marker(ctx, v, shape, art.keystone, inside.x + inside.state.keystone[0], inside.y + inside.state.keystone[1], true)
