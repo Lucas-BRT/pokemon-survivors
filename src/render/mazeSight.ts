@@ -90,7 +90,7 @@ export const mazeSees = (g: Game, x: number, y: number) => {
 
 let map: { canvas: HTMLCanvasElement; ctx: Ctx; w: number; h: number } | null = null
 
-/** The dark over the mazes in view: each pixel's light is blended between the centers of the cells around it (never across a hedge), then cut into four dithered steps. */
+/** The dark over the mazes in view: each pixel's light is blended between the centers of the cells around it (never across a hedge), then cut into seven dithered steps. */
 export const drawMazeFog = (ctx: Ctx, g: Game, camX: number, camY: number) => {
   if (g.place.inside || g.rift.arena) return
   const { w, h } = g.view
@@ -138,16 +138,22 @@ export const drawMazeFog = (ctx: Ctx, g: Game, camX: number, camY: number) => {
         const dc = fx < 0 ? -1 : 1
         const dr = fy < 0 ? -1 : 1
         const here = level(c, r)
-        const sx = canStep(m, c, r, dc, 0) && c + dc >= 0 && c + dc < m.cols ? level(c + dc, r) : here
-        const sy = canStep(m, c, r, 0, dr) && r + dr >= 0 && r + dr < m.rows ? level(c, r + dr) : here
+        const beyond = (nc: number, nr: number, open: boolean) => {
+          if (nc < 0 || nr < 0 || nc >= m.cols || nr >= m.rows) return here
+          const v = level(nc, nr)
+          // Across a hedge only a share of the light gets over.
+          return open ? v : here + (v - here) * GRAND.leak
+        }
+        const sx = beyond(c + dc, r, canStep(m, c, r, dc, 0))
+        const sy = beyond(c, r + dr, canStep(m, c, r, 0, dr))
         const tx = Math.abs(fx)
         const ty = Math.abs(fy)
         const L = here * (1 - tx) * (1 - ty) + sx * tx * (1 - ty) + sy * (1 - tx) * ty + (sx + sy - here) * tx * ty
-        // Four steps, dithered on a 4×4 matrix over the 2 px cells.
+        // Seven steps, dithered on a 4×4 matrix over the 2 px cells.
         const t = (BAYER[(my & 3) * 4 + (mx & 3)]! + 0.5) / 16
         const q = Math.max(0, Math.min(1, L))
-        const step = Math.floor(q * 3 + t)
-        const dark = 1 - Math.min(3, step) / 3
+        const step = Math.floor(q * 6 + t)
+        const dark = 1 - Math.min(6, step) / 6
         d[k] = 6
         d[k + 1] = 8
         d[k + 2] = 6
