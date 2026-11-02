@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createRng } from '../engine/rng'
 import { fits, keepOn } from './arenaFloor'
 import { CAVE_GEN } from '../data/procgen'
-import { DUNGEON, dungeonNav, floorShapes, generateFloor, generateFloorV2, roomAt, roomDistances, type DungeonFloor } from './dungeon'
+import { DUNGEON, floorShapes, generateFloor, generateFloorV2, roomAt, roomDistances, type DungeonFloor } from './dungeon'
 
 const floors = (index: number) => Array.from({ length: 40 }, (_, seed) => generateFloor(createRng(seed + 1), index))
 
@@ -53,25 +53,6 @@ describe('generateFloor', () => {
 
   it('lays out the same floor from the same seed', () => {
     expect(generateFloor(createRng(9), 1)).toEqual(generateFloor(createRng(9), 1))
-  })
-})
-
-describe('dungeonNav', () => {
-  it('sends a walker in another room into the corridor toward the player, and lets one in the same room go straight', () => {
-    for (const f of floors(1)) {
-      const [px, py] = f.start
-      const nav = dungeonNav(f, px, py)!
-      const dist = roomDistances(f, [f.startRoom])
-      const out = { x: 0, y: 0 }
-      expect(nav(px + 3, py + 3, out)).toBe(false)
-      const far = f.rooms.findIndex((_, i) => dist[i]! > 0)
-      const r = f.rooms[far]!
-      expect(nav(r.x + r.w / 2, r.y + r.h / 2, out)).toBe(true)
-      // The waypoint is the first bend of a corridor out of that room, toward a room one corridor closer.
-      const link = f.links.find((l) => (l.a === far && l.path[1]![0] === out.x && l.path[1]![1] === out.y) || (l.b === far && l.path[2]![0] === out.x && l.path[2]![1] === out.y))
-      expect(link).toBeDefined()
-      expect(dist[link!.a === far ? link!.b : link!.a]).toBe(dist[far]! - 1)
-    }
   })
 })
 

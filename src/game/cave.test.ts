@@ -270,3 +270,26 @@ describe.skipIf(!PROCGEN.cave)('the cave’s light sources', () => {
     expect(Math.max(...deep)).toBeGreaterThanOrEqual(4)
   })
 })
+
+describe.skipIf(!PROCGEN.cave)('the cave’s walkers on a floor with rocks', () => {
+  it('all reach a player standing still in the start room, from every room, round the rocks and out by the doors', () => {
+    for (let seed = 1; seed <= 8; seed++) {
+      const { g, inside } = inCave(seed, 3)
+      inside.intro = 0
+      const plan = inside.state.plan!
+      g.player.moves.length = 0
+      inside.left = 1e9
+      Object.assign(g.player, { x: inside.x + plan.start[0], y: inside.y + plan.start[1] })
+      const walkers = plan.rooms.flatMap((r, room) => (room === plan.startRoom ? [] : [spawnEnemy(g, 'rattata', inside.x + r.x + r.w / 2, inside.y + r.y + r.h / 2)]))
+      const closest = walkers.map(() => Infinity)
+      for (let i = 0; i < 90 / TICK; i++) {
+        walkers.forEach((e) => (e.alert = CAVE.sight.memory))
+        g.player.hp = g.player.stats.maxHp
+        if (g.phase !== 'playing') chooseOffer(g, g.player.offers[0]!)
+        step(g, STILL, TICK)
+        walkers.forEach((e, k) => (closest[k] = Math.min(closest[k]!, Math.hypot(e.x - g.player.x, e.y - g.player.y))))
+      }
+      closest.forEach((d, k) => expect(d, `seed ${seed} walker ${k}`).toBeLessThan(40))
+    }
+  })
+})
