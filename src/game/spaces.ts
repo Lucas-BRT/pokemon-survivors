@@ -36,6 +36,8 @@ export type Space = {
   bounds: Bounds
   /** Whether a visited space of this kind starts at the cave's floor level `L0` (rooms do; a corridor only has what its sources add). */
   base: boolean
+  /** The walk through it from one of its two doors to the other, when it isn't the straight line between them (a corridor's bent path). */
+  walk?: number
 }
 
 /** Where two spaces meet: a corridor's mouth on a room's wall. */
@@ -171,6 +173,15 @@ const wallCrossing = (room: Rect, from: Pt, toward: Pt): Pt => {
   return across ? [wall, from[1]] : [from[0], wall]
 }
 
+/** The length of a corridor's path from the wall of one room to the wall of the other (the path itself starts and ends inside the rooms). */
+const wayBetweenDoors = (rooms: readonly Rect[], l: DungeonFloor['links'][number]) => {
+  const n = l.path.length
+  const total = l.path.slice(1).reduce((a, p, i) => a + dm.hypot(p[0] - l.path[i]![0], p[1] - l.path[i]![1]), 0)
+  const [ax, ay] = wallCrossing(rooms[l.a]!, l.path[0]!, l.path[1]!)
+  const [bx, by] = wallCrossing(rooms[l.b]!, l.path[n - 1]!, l.path[n - 2]!)
+  return Math.max(0, total - dm.hypot(ax - l.path[0]![0], ay - l.path[0]![1]) - dm.hypot(bx - l.path[n - 1]![0], by - l.path[n - 1]![1]))
+}
+
 const floors = new WeakMap<object, SpaceMap>()
 
 /** Links join spaces: build a map from spaces and the pairs that meet at a point. */
@@ -193,7 +204,7 @@ export const spacesOf = (plan: Pick<DungeonFloor, 'rooms' | 'links'>): SpaceMap 
   const rect = (r: Rect): Shape => ({ kind: 'rect', x: r.x, y: r.y, w: r.w, h: r.h })
   const spaces: Space[] = [
     ...plan.rooms.map((r) => makeSpace('room', [rect(r)])),
-    ...plan.links.map((l) => makeSpace('corridor', corridorFloor(plan.rooms, l.rects).map(rect))),
+    ...plan.links.map((l) => ({ ...makeSpace('corridor', corridorFloor(plan.rooms, l.rects).map(rect)), walk: wayBetweenDoors(plan.rooms, l) })),
   ]
   const doors: Door[] = plan.links.flatMap((l, i) => {
     const n = l.path.length

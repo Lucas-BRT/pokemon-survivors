@@ -15,7 +15,7 @@ import * as dm from '../engine/dmath'
  *
  * (`levelOf`): no source on, `L_S = L0`; more sources or a smaller space, brighter; never above `Lmax`.
  * From another space the light of an *on* source is seen weaker, by `attenuation(D)` of the distance `D` of the nearest player to its
- * space (1 inside it).
+ * space, by the way one walks (`spaceDistances`; 0 inside it).
  */
 
 export type LightSource = { x: number; y: number; kind: LightKind; on: boolean; left: number; age: number }
@@ -50,12 +50,56 @@ const smooth = (t: number) => {
 export const attenuation = (distance: number, n: RemoteNumbers) =>
   (n.remoteMin + (1 - n.remoteMin) * dm.exp(-distance / n.remoteDecay)) * (1 - smooth((distance - n.remoteReach) / Math.max(1, n.remoteFade)))
 
-/** The nearest of `players` to a space, px (0 when one stands in it): the signed distance to its region, cut at 0. */
-export const playersDistance = (map: SpaceMap, s: number, players: ReadonlyArray<{ x: number; y: number }>) => {
-  let best = Infinity
-  for (const p of players) best = Math.min(best, Math.max(0, spaceSdf(map, s, p.x, p.y)))
-  return best
+/**
+ * How far each space is from the nearest of `players`, px, by the way one walks: 0 for the space a player stands in, else the walk to
+ * its nearest door (Dijkstra over the doors: from a player to the doors of their space, and from door to door through a space: its
+ * `walk` when it has one, else the straight line). Light does not go through rock, so a room behind a wall is as far as the way round.
+ * A player standing in the rock counts at the nearest space, plus the distance to it. A space nobody can walk to is as far as the
+ * straight distance to it (the signed distance, cut at 0).
+ */
+export const spaceDistances = (map: SpaceMap, players: ReadonlyArray<{ x: number; y: number }>): number[] => {
+  const out = Array<number>(map.spaces.length).fill(Infinity)
+  const door = Array<number>(map.doors.length).fill(Infinity)
+  for (const p of players) {
+    // The space they stand in, or the nearest to them.
+    let host = -1
+    let off = Infinity
+    for (let s = 0; s < map.spaces.length; s++) {
+      const d = spaceSdf(map, s, p.x, p.y)
+      if (d < off) {
+        off = d
+        host = s
+      }
+    }
+    if (host < 0) continue
+    off = Math.max(0, off)
+    out[host] = Math.min(out[host]!, off)
+    map.doors.forEach((d, i) => {
+      if (d.a === host || d.b === host) door[i] = Math.min(door[i]!, off + dm.hypot(d.x - p.x, d.y - p.y))
+    })
+  }
+  // Door to door through a space, until nothing shortens (a few dozen doors).
+  const through = (s: number, a: number, b: number) => map.spaces[s]!.walk ?? dm.hypot(map.doors[a]!.x - map.doors[b]!.x, map.doors[a]!.y - map.doors[b]!.y)
+  const done = Array<boolean>(map.doors.length).fill(false)
+  for (;;) {
+    let u = -1
+    for (let i = 0; i < door.length; i++) if (!done[i] && door[i]! < Infinity && (u < 0 || door[i]! < door[u]!)) u = i
+    if (u < 0) break
+    done[u] = true
+    const d = map.doors[u]!
+    for (const s of [d.a, d.b]) {
+      out[s] = Math.min(out[s]!, door[u]!)
+      map.doors.forEach((o, v) => {
+        if (v !== u && (o.a === s || o.b === s) && door[u]! + through(s, u, v) < door[v]!) door[v] = door[u]! + through(s, u, v)
+      })
+    }
+  }
+  // Nobody can walk to it (a space with no door): the straight distance.
+  return out.map((d, s) => (d < Infinity ? d : Math.min(...players.map((p) => Math.max(0, spaceSdf(map, s, p.x, p.y))), Infinity)))
 }
+
+/** The distance of space `s` from the nearest of `players` (`spaceDistances`). */
+export const playersDistance = (map: SpaceMap, s: number, players: ReadonlyArray<{ x: number; y: number }>) => spaceDistances(map, players)[s]!
 
 /**
  * The energy `E_S` of every space of the map from the sources that are on (`all` counts every one: the lab). A source in a corridor
@@ -96,8 +140,9 @@ export const onSources = (sources: readonly LightSource[]) => sources.flatMap((k
 export const seenLevels = (map: SpaceMap, levels: readonly number[], visited: (space: number) => boolean, players: ReadonlyArray<{ x: number; y: number }>, n: LevelNumbers & RemoteNumbers) => {
   const level: number[] = []
   const factor: number[] = []
+  const far = spaceDistances(map, players)
   levels.forEach((l, s) => {
-    const a = attenuation(playersDistance(map, s, players), n)
+    const a = attenuation(far[s]!, n)
     factor.push(a)
     const base = map.spaces[s]!.base ? n.floor : 0
     level.push(visited(s) ? base + (l - n.floor) * a : 0)

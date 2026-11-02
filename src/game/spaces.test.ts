@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LIGHT_FIELD } from '../data/lightSources'
 import { CAVE } from '../data/places'
-import { atDepth, attenuation, playersDistance, seenLevels, spaceEnergies, spaceLevels, type LightSource } from './lightSources'
+import { atDepth, attenuation, playersDistance, seenLevels, spaceDistances, spaceEnergies, spaceLevels, type LightSource } from './lightSources'
 import { chamberOf, hostOf, makeSpace, regionSdf, shapeArea, shapeSdf, spaceMapOf, spaceSdf, type Shape } from './spaces'
 
 const n = { ...CAVE.lit, ...LIGHT_FIELD }
@@ -103,8 +103,10 @@ describe('the light on a floor of other shapes', () => {
     expect(here.level[0]).toBeCloseTo(levels[0]!)
     expect(there.level[0]!).toBeLessThan(here.level[0]!)
     expect(there.level[0]!).toBeGreaterThan(n.floor)
-    // The distance is the signed distance cut at 0.
-    expect(playersDistance(map, 0, [{ x: 300, y: 70 }])).toBeCloseTo(Math.max(0, spaceSdf(map, 0, 300, 70)))
+    // The distance is the walk: from the cavern to its door, then the corridor to the hall's door.
+    expect(playersDistance(map, 0, [{ x: 300, y: 70 }])).toBeCloseTo(100 + 100)
+    expect(playersDistance(map, 1, [{ x: 300, y: 70 }])).toBeCloseTo(100)
+    expect(playersDistance(map, 2, [{ x: 300, y: 70 }])).toBe(0)
     expect(attenuation(playersDistance(map, 0, [{ x: 25, y: 75 }]), n)).toBe(1)
   })
 
@@ -114,6 +116,43 @@ describe('the light on a floor of other shapes', () => {
     expect(seen.level[0]).toBeCloseTo(n.floor)
     expect(seen.level[1]).toBeCloseTo(0)
     expect(seen.level[2]).toBeCloseTo(n.floor)
+  })
+})
+
+describe('the light goes round the rock, not through it', () => {
+  // Two rooms side by side with a thin wall between them (10 px), joined only by a long corridor round the bottom.
+  const a = makeSpace('room', [{ kind: 'rect', x: 0, y: 0, w: 100, h: 100 }])
+  const b = makeSpace('room', [{ kind: 'rect', x: 110, y: 0, w: 100, h: 100 }])
+  const way = { ...makeSpace('corridor', [{ kind: 'rect', x: 40, y: 100, w: 130, h: 20 }]), walk: 300 }
+  const map = spaceMapOf([a, b, way], [{ a: 0, b: 2, x: 50, y: 100 }, { a: 2, b: 1, x: 160, y: 100 }])
+
+  it('measures the way one walks: a room behind a wall is as far as the way round', () => {
+    const player = [{ x: 50, y: 50 }]
+    // Straight through the wall it is 10 px; round by the corridor: to the door (50), the corridor's walk (300).
+    expect(Math.max(0, spaceSdf(map, 1, 50, 50))).toBeCloseTo(60)
+    const far = spaceDistances(map, player)
+    expect(far[0]).toBe(0)
+    expect(far[2]).toBeCloseTo(50)
+    expect(far[1]).toBeCloseTo(50 + 300)
+    // So the light of a lamp in the next room is far weaker than the straight line would say.
+    const levels = spaceLevels(map, [source(150, 50)], n)
+    const seen = seenLevels(map, levels, () => true, player, n)
+    expect(seen.factor[1]!).toBeCloseTo(attenuation(350, n))
+    expect(seen.factor[1]!).toBeLessThan(attenuation(60, n))
+  })
+
+  it('takes the nearest of several players, and a player in the rock counts at the nearest space plus the way to it', () => {
+    const both = spaceDistances(map, [{ x: 50, y: 50 }, { x: 150, y: 50 }])
+    expect(both).toEqual([0, 0, expect.closeTo(50, 5)])
+    const rock = spaceDistances(map, [{ x: 105, y: 50 }])
+    // Five px out of room a (or b): that nearest room is at 5, the other round the corridor.
+    expect(Math.min(rock[0]!, rock[1]!)).toBeCloseTo(5)
+    expect(Math.max(rock[0]!, rock[1]!)).toBeGreaterThan(300)
+  })
+
+  it('a space nobody can walk to is as far as the straight line to it', () => {
+    const lone = spaceMapOf([a, makeSpace('room', [{ kind: 'rect', x: 300, y: 0, w: 10, h: 10 }])], [])
+    expect(spaceDistances(lone, [{ x: 50, y: 50 }])[1]).toBeCloseTo(Math.hypot(250, 40))
   })
 })
 

@@ -97,7 +97,7 @@ describe('how the light is seen from another space', () => {
 
   it('a room with a source on is the same all over it, and weaker (but still above its floor) from another room, weakening with the distance', () => {
     const plan = floor()
-    const { a, b } = pair(plan)
+    const { a } = pair(plan)
     const lamp = source(middle(plan, a).x, middle(plan, a).y)
     const levels = spaceLevels(spacesOf(plan), [lamp], n)
     const r = plan.rooms[a]!
@@ -106,8 +106,9 @@ describe('how the light is seen from another space', () => {
     expect(corner(lamp.x, lamp.y)).toBeCloseTo(levels[a]!)
     expect(corner(r.x + 2, r.y + 2)).toBeCloseTo(levels[a]!)
     expect(corner(r.x + r.w - 2, r.y + r.h - 2)).toBeCloseTo(levels[a]!)
-    // From the other room: weaker than inside, above the floor.
-    const from = middle(plan, b)
+    // From the next room along a corridor: weaker than inside, above the floor (the far one may be out of reach altogether).
+    const link = plan.links.find((l) => l.a === a || l.b === a)!
+    const from = middle(plan, link.a === a ? link.b : link.a)
     const remote = corner(from.x, from.y)
     expect(remote).toBeLessThan(levels[a]!)
     expect(remote).toBeGreaterThan(n.floor)
