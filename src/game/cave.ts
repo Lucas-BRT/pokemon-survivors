@@ -12,6 +12,7 @@ import { drawNpc, openShop, type CaveShop } from './caveShop'
 import { dropItem } from './consumables'
 import { floorShapes, generateFloor, generateFloorV2, roomAt, type DungeonFloor, type Rect } from './dungeon'
 import { burst, shakeScreen } from './effects'
+import { DEBUG_TUNE } from './debugTune'
 import { trapStrike } from './hazards'
 import { spawnEnemy } from './enemies'
 import { chestCoins } from './mapEventRules'
@@ -343,7 +344,8 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
     c.age += dt
   }
   retain(s.touched, (c) => c.left > 0)
-  const { rx, ry, time } = CAVE.crystal
+  const { rx, ry } = CAVE.crystal
+  const time = CAVE.crystal.time * DEBUG_TUNE.crystal
   s.lights.forEach(([lx, ly], i) => {
     if (!g.players.some((p) => standing(g, p) && dm.sq((p.x - inside.x - lx) / rx) + dm.sq((p.y - inside.y - ly) / ry) <= 1)) return
     const lit = s.touched.find((c) => c.i === i)

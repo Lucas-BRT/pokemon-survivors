@@ -81,8 +81,26 @@ export const wasSeen = (seen: ReadonlySet<number>, x: number, y: number) => seen
  * The cave's light numbers as the screen reads them: `CAVE.lit`'s, plus the spill into corridors, the crystals' aura and a scale for the player's light.
  * A copy the dev light menu (`ui/lightMenu.ts`) edits at run time; `retune` after a change so the levels are worked out again.
  */
-export type Lit = { -readonly [K in keyof typeof CAVE.lit]: number } & { spill: number; rim: number; allOn: number; aura: number; auraGain: number; playerScale: number }
-export const LIT_DEFAULTS: Lit = { ...CAVE.lit, spill: 32, rim: 6, allOn: 0, aura: 30, auraGain: 0.65, playerScale: 1 }
+export type Lit = { -readonly [K in keyof typeof CAVE.lit]: number } & {
+  spill: number
+  rim: number
+  allOn: number
+  aura: number
+  auraGain: number
+  playerScale: number
+  /** A shining crystal: seconds its light takes to ease in, px its radius wavers, the share of its light kept while it blinks out, and the radius (px) of the lit spot round its foot. */
+  auraEase: number
+  auraWaver: number
+  auraBlink: number
+  auraFoot: number
+  /** A crystal that doesn't shine (0 off, 1 on): the dull glint's radius (px), its strength, the distance (px) a player can be and still see it at full, and how far past that it fades out. */
+  glint: number
+  glintR: number
+  glintGain: number
+  glintNear: number
+  glintFade: number
+}
+export const LIT_DEFAULTS: Lit = { ...CAVE.lit, spill: 32, rim: 6, allOn: 0, aura: 30, auraGain: 0.65, playerScale: 1, auraEase: 0.4, auraWaver: 1.5, auraBlink: 0.3, auraFoot: 26, glint: 1, glintR: 9, glintGain: 0.7, glintNear: 60, glintFade: 90 }
 export const lit: Lit = { ...LIT_DEFAULTS }
 let tuning = 0
 export const retune = () => void tuning++

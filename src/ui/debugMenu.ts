@@ -57,7 +57,7 @@ const NEED_CAVE = 'Entre na caverna primeiro.'
 type LightControl = { key: keyof Lit; label: string; min: number; max: number; step: number }
 
 /** The cave's light numbers by what they act on: each group is a collapsible section of the tab. */
-const LIGHT: ReadonlyArray<{ group: string; controls: readonly LightControl[] }> = [
+const LIGHT: ReadonlyArray<{ group: string; controls: readonly LightControl[]; extra?: () => Ctl[] }> = [
   {
     group: 'Escuridão geral',
     controls: [
@@ -80,11 +80,26 @@ const LIGHT: ReadonlyArray<{ group: string; controls: readonly LightControl[] }>
     ],
   },
   {
-    group: 'Fontes de luz (cristais)',
+    group: 'Cristal ativo (aceso)',
     controls: [
       { key: 'allOn', label: 'Todos os cristais ativos (0/1, lab)', min: 0, max: 1, step: 1 },
-      { key: 'auraGain', label: 'Força da aura do cristal', min: 0, max: 1, step: 0.05 },
-      { key: 'aura', label: 'Aura do cristal (px)', min: 10, max: 90, step: 2 },
+      { key: 'auraGain', label: 'Força da luz', min: 0, max: 1, step: 0.05 },
+      { key: 'aura', label: 'Raio da luz (px)', min: 10, max: 120, step: 2 },
+      { key: 'auraFoot', label: 'Raio do chão iluminado no pé (px)', min: 0, max: 80, step: 2 },
+      { key: 'auraEase', label: 'Tempo para acender (s)', min: 0, max: 3, step: 0.05 },
+      { key: 'auraWaver', label: 'Oscilação do raio (px)', min: 0, max: 8, step: 0.25 },
+      { key: 'auraBlink', label: 'Luz ao piscar antes de apagar', min: 0, max: 1, step: 0.05 },
+    ],
+    extra: () => [{ t: 'slider', label: 'Duração acesa (x 25 s)', min: 0.1, max: 8, step: 0.1, get: () => DEBUG_TUNE.crystal, set: (n) => (DEBUG_TUNE.crystal = n) }],
+  },
+  {
+    group: 'Cristal inativo (apagado)',
+    controls: [
+      { key: 'glint', label: 'Brilho fraco ligado (0/1)', min: 0, max: 1, step: 1 },
+      { key: 'glintGain', label: 'Força do brilho', min: 0, max: 1, step: 0.05 },
+      { key: 'glintR', label: 'Raio do brilho (px)', min: 2, max: 40, step: 1 },
+      { key: 'glintNear', label: 'Distância do brilho total (px)', min: 0, max: 300, step: 5 },
+      { key: 'glintFade', label: 'Distância até sumir (px)', min: 5, max: 300, step: 5 },
     ],
   },
   {
@@ -111,6 +126,7 @@ const lightTab: Tab = {
     ...LIGHT.flatMap((grp): Ctl[] => [
       { t: 'title', label: grp.group },
       ...grp.controls.map((c): Ctl => ({ t: 'slider', label: c.label, min: c.min, max: c.max, step: c.step, get: () => lit[c.key], set: (n) => { lit[c.key] = n; retune() } })),
+      ...(grp.extra?.() ?? []),
     ]),
     { t: 'title', label: 'Sala do laboratório' },
     { t: 'slider', label: 'Tamanho (x sala média)', min: 0.5, max: 12, step: 0.5, get: () => lab.size, set: (n) => (lab.size = n) },

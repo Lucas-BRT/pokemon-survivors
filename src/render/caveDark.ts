@@ -147,14 +147,15 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
       // Eases in over its first moments and blinks in its last seconds before going out.
       const age = shining ? shining.age : Infinity
       const blinking = shining !== undefined && shining.left < CAVE.crystal.blink && Math.floor(t * 8) % 2 === 0
-      points.push({ x, y, r: lit.aura + Math.sin(t * 2 + lx) * 1.5, i: lit.auraGain * smooth(age / 0.4) * (blinking ? 0.3 : 1) })
-      litBy.push([x, y, 26])
+      points.push({ x, y, r: lit.aura + Math.sin(t * 2 + lx) * lit.auraWaver, i: lit.auraGain * smooth(age / Math.max(0.01, lit.auraEase)) * (blinking ? lit.auraBlink : 1) })
+      litBy.push([x, y, lit.auraFoot])
       return
     }
+    if (!lit.glint) return
     let nearest = Infinity
     for (const q of g.players) if (!q.gone) nearest = Math.min(nearest, Math.hypot(q.x - x, q.y - y))
-    const glint = 0.7 * (1 - smooth((nearest - 60) / 90))
-    if (glint > 0.02) points.push({ x, y, r: 9, i: glint })
+    const glint = lit.glintGain * (1 - smooth((nearest - lit.glintNear) / Math.max(1, lit.glintFade)))
+    if (glint > 0.02) points.push({ x, y, r: lit.glintR, i: glint })
   })
   if (s.stairs && glows(inside.x + s.stairs[0], inside.y + s.stairs[1])) points.push({ x: inside.x + s.stairs[0], y: inside.y + s.stairs[1], r: 24 + Math.sin(t * 3) * 2, i: 1 })
   if (s.chest && glows(inside.x + s.chest.x, inside.y + s.chest.y)) points.push({ x: inside.x + s.chest.x, y: inside.y + s.chest.y - 6, r: 30, i: 1 })
