@@ -23,9 +23,11 @@ import { COIN_VALUES } from './meta'
 import { awardEgg, dropCoins, dropPickup } from './pickups'
 import { placePool, type PlaceInteriorOf } from './place'
 import { notifyPlace, solidAt, spawnInPlace, startLoot } from './placeKit'
-import { playerTypes, type Solid } from './terrain'
+import type { Solid } from './terrain'
 import { actAs, anchorPlayer, centerScreen, phaseOf, placeTeam, playerWithin, standing } from './players'
 import type { Game, Player } from './types'
+import { formOf } from './branch'
+import { profileOf } from '../data/pokemonLight'
 import * as dm from '../engine/dmath'
 
 /**
@@ -33,7 +35,7 @@ import * as dm from '../engine/dmath'
  * (`dungeon.ts`) with stairs down, then a treasure chamber whose chest is
  * guarded by a Monster House. The PMD wind warns three times, then blows the
  * explorer back out. Only a circle of light around the player shows the way
- * (`caveLight`), wider for Fire and Electric types.
+ * (`lightRange`), set by the Pokémon's own light (`data/pokemonLight.ts`).
  */
 
 export type CaveState = {
@@ -71,15 +73,19 @@ type CaveInside = PlaceInteriorOf<'cave'>
 /** The treasure chamber: a round cavern, crystals around its wall and the chest in the middle. */
 const CHAMBER = { r: 120, chest: [0, -14] as Pt, start: [0, 94] as Pt, crystals: 7 } as const
 
-/** How far the acting player's light reaches: Fire types carry a flame, Electric types use Flash. */
-export const caveLight = (g: Game) => {
-  const types = playerTypes(g)
+/** The light profile of player `p`'s Pokémon (`data/pokemonLight.ts`): its form's, so an evolution changes it. */
+export const lightOf = (g: Game, p: Player) => profileOf(formOf(g, p).dex)
+
+/** How far player `p`'s light reaches: what its Pokémon gives (an emitter's flame, a bat's sonar) and the lantern's. */
+export const lightRange = (g: Game, p: Player) => {
   const inside = g.place.inside
-  const lantern = inside?.id === 'cave' && inside.state.lantern ? CAVE_SHOP.lantern : 0
-  return (types.includes('fire') ? CAVE.fireLight : types.includes('electric') ? CAVE.electricLight : CAVE.light) + lantern
+  return lightOf(g, p).range + (inside?.id === 'cave' && inside.state.lantern ? CAVE_SHOP.lantern : 0)
 }
 
-type Floor = { layout: FloorPlan; solids: Solid[]; start: Pt; plan: DungeonFloor | null; stairs: Pt | null; chest: CaveState['chest']; lights: readonly Pt[]; shop: CaveShop | null }
+/** How far the acting player's light reaches. */
+export const caveLight = (g: Game) => lightRange(g, g.player)
+
+export type Floor = { layout: FloorPlan; solids: Solid[]; start: Pt; plan: DungeonFloor | null; stairs: Pt | null; chest: CaveState['chest']; lights: readonly Pt[]; shop: CaveShop | null }
 
 /** Lays out floor `index` around world (x, y) and puts its items down: a pile of Poké and something from an item ball. */
 /** A floor layout the next `layFloor` uses instead of drawing one (the `?debug=` lab, `debugStart.ts`). */
@@ -140,7 +146,7 @@ const layFloor = (g: Game, x: number, y: number, index: number, level: number): 
   }
 }
 
-const stateOf = (f: Floor, floor: number, level: number): CaveState => ({ level, floor, plan: f.plan, stairs: f.stairs, chest: f.chest, sources: f.lights.map(([x, y]): LightSource => ({ x, y, kind: 'crystal', on: false, left: 0, age: 0 })), wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [], visited: f.plan ? [f.plan.startRoom] : [], shop: f.shop, lantern: false, compass: false, fortune: false, traps: f.plan ? f.plan.traps.map(([x, y]) => ({ x, y, done: false })) : [] })
+export const stateOf = (f: Floor, floor: number, level: number): CaveState => ({ level, floor, plan: f.plan, stairs: f.stairs, chest: f.chest, sources: f.lights.map(([x, y]): LightSource => ({ x, y, kind: 'crystal', on: false, left: 0, age: 0 })), wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [], visited: f.plan ? [f.plan.startRoom] : [], shop: f.shop, lantern: false, compass: false, fortune: false, traps: f.plan ? f.plan.traps.map(([x, y]) => ({ x, y, done: false })) : [] })
 
 export const buildCave = (g: Game, x: number, y: number, level = 1) => {
   const f = layFloor(g, x, y, 0, level)
@@ -184,14 +190,8 @@ const laidFloor = (g: Game, inside: CaveInside, next: number) => {
 
 /** Whether (x, y) is in some player's light (and its 24 px fringe). */
 const inLight = (g: Game, x: number, y: number) => {
-  const before = g.player
-  let lit = false
-  for (const p of g.players) {
-    g.player = p
-    if (dm.sq(x - p.x) + dm.sq(y - p.y) <= dm.sq(caveLight(g) + 24)) lit = true
-  }
-  g.player = before
-  return lit
+  for (const p of g.players) if (dm.sq(x - p.x) + dm.sq(y - p.y) <= dm.sq(lightRange(g, p) + 24)) return true
+  return false
 }
 
 /** A spot in the dark: in some room (or around the chamber), past every player's light but close enough to come for one of them (they take turns, `anchorPlayer`). */
@@ -325,6 +325,27 @@ export const atCaveChest = (g: Pick<Game, 'place'>, p: Pick<Player, 'x' | 'y' | 
   return chest !== null && !chest.open && dm.sq(p.x - inside.x - chest.x) + dm.sq(p.y - inside.y - chest.y) < dm.sq(CAVE.chestRadius + p.radius)
 }
 
+/** A source a player's foot touches comes on for a while and then goes off (touching it again turns it on afresh). Shared with Explorers. */
+export const litSources = (g: Game, inside: CaveInside, dt: number) => {
+  const s = inside.state
+  for (const k of s.sources) {
+    if (!k.on) continue
+    k.left -= dt
+    k.age += dt
+    if (k.left <= 0) {
+      k.on = false
+      k.age = 0
+    }
+  }
+  for (const k of s.sources) {
+    const kind = LIGHT_KINDS[k.kind]
+    if (!g.players.some((p) => standing(g, p) && dm.sq((p.x - inside.x - k.x) / kind.rx) + dm.sq((p.y - inside.y - k.y) / kind.ry) <= 1)) continue
+    if (!k.on) k.age = 0
+    k.on = true
+    k.left = kind.time * DEBUG_TUNE.source
+  }
+}
+
 /** Every tick in the cave: the wind's warnings, the stairs, the Monster House, the chest and the dark's spawns. */
 export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
   const s = inside.state
@@ -343,23 +364,7 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
       springAmbush(g, inside, plan.rooms[room]!, plan.sizes[room]!, p)
     }
   }
-  // A source a player's foot touches comes on for a while and then goes off (touching it again turns it on afresh).
-  for (const k of s.sources) {
-    if (!k.on) continue
-    k.left -= dt
-    k.age += dt
-    if (k.left <= 0) {
-      k.on = false
-      k.age = 0
-    }
-  }
-  for (const k of s.sources) {
-    const kind = LIGHT_KINDS[k.kind]
-    if (!g.players.some((p) => standing(g, p) && dm.sq((p.x - inside.x - k.x) / kind.rx) + dm.sq((p.y - inside.y - k.y) / kind.ry) <= 1)) continue
-    if (!k.on) k.age = 0
-    k.on = true
-    k.left = kind.time * DEBUG_TUNE.source
-  }
+  litSources(g, inside, dt)
   // Standing in the Cristalário's ring opens the sheet for whoever stands there.
   const shop = s.shop
   if (shop) {

@@ -1,6 +1,7 @@
 import { formatTime } from '../engine/math'
 import { GRAVEYARD } from '../data/places'
 import { overtime } from '../game/endless'
+import { themeOf } from '../game/explorers'
 import type { Game } from '../game/types'
 import { t } from '../i18n'
 import { h, setText } from './dom'
@@ -16,6 +17,11 @@ const insidePill = (g: Game): Pill => {
   const urgent = inside.left < 10
   switch (inside.id) {
     case 'cave':
+      if (g.explorers) {
+        const e = t().explorers
+        const theme = themeOf(g.explorers.depth)
+        return { text: e.hud(e.themes[theme].name, m.floor(g.explorers.depth), e.themes[theme].clock, time), kind: 'place', urgent }
+      }
       return { text: m.hudCave(`${m.level(inside.state.level)} ${m.floor(inside.state.floor + 1)}`, time), kind: 'place', urgent }
     case 'graveyard': {
       const s = inside.state

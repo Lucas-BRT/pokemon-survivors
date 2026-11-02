@@ -9,6 +9,8 @@ import { GRAVEYARD, PLACE, PLACES, SKY, type PlaceId, type WingId } from '../dat
 import { fits } from '../game/arenaFloor'
 import { dormant } from '../game/dungeon'
 import { drawCaveDark } from './caveDark'
+import { EXPLORER_THEMES, type ExplorerThemeId } from '../data/explorers'
+import { themeOf } from '../game/explorers'
 import type { PlaceEntrance, PlaceInterior, PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
 import { art, toIconUrl } from './art'
@@ -87,8 +89,83 @@ const paint = (w: number, h: number, color: (px: number, py: number) => string |
   return canvas
 }
 
-const CAVE_FACE = ['#7a6654', '#6a5848', '#5a4a3e', '#4c3e34', '#40342c', '#362c25', '#2e251f', '#271f1a', '#211a16'] as const
-const FACE = CAVE_FACE.length
+/** The colors of a dungeon floor's art: the rock's face, the wall's top, the lit lips and shades, and the floor's own tones. */
+type FloorLook = {
+  face: readonly string[]
+  /** The wall's top: light, dark and middle. */
+  top: readonly [string, string, string]
+  lip: string
+  hi: string
+  shade1: string
+  shade2: string
+  crack: string
+  pit: string
+  fleck: string
+  /** The floor: light, dark, middle. */
+  ground: readonly [string, string, string]
+  /** What lies behind the walls' tops. */
+  bg: string
+}
+
+/** The cave's rock, and the open-air themes of Explorers (`data/explorers.ts`): the field's grass and tall hedges, the forest's moss and trunks. */
+const LOOKS: Record<ExplorerThemeId, FloorLook> = {
+  cave: {
+    face: ['#7a6654', '#6a5848', '#5a4a3e', '#4c3e34', '#40342c', '#362c25', '#2e251f', '#271f1a', '#211a16'],
+    top: ['#241c1a', '#140f0f', '#1c1515'],
+    lip: '#3a302a',
+    hi: '#5a4a3e',
+    shade1: '#2a221c',
+    shade2: '#352c26',
+    crack: '#1e1814',
+    pit: '#2a221e',
+    fleck: '#8a7462',
+    ground: ['#504438', '#3e342e', '#463b33'],
+    bg: '#1c1515',
+  },
+  field: {
+    face: ['#8cc868', '#7cb85a', '#6aa44c', '#5a9040', '#4c7c36', '#40692e', '#355a26', '#2c4c20', '#243f1a'],
+    top: ['#3e7a34', '#2a5a26', '#336a2c'],
+    lip: '#98d070',
+    hi: '#a8dc80',
+    shade1: '#4c8a3a',
+    shade2: '#58983f',
+    crack: '#2c5a26',
+    pit: '#5a9a42',
+    fleck: '#f0e478',
+    ground: ['#6cb050', '#5c9c44', '#64a84a'],
+    bg: '#2a5a26',
+  },
+  forest: {
+    face: ['#5a4630', '#4c3a28', '#3f301f', '#352819', '#2c2014', '#241a10', '#1d150c', '#171009', '#120c07'],
+    top: ['#1c3a20', '#10261a', '#16301c'],
+    lip: '#3c6a38',
+    hi: '#4a7a42',
+    shade1: '#2a4a28',
+    shade2: '#32562e',
+    crack: '#120c07',
+    pit: '#26402a',
+    fleck: '#8a7a4a',
+    ground: ['#46663a', '#3a5a32', '#40602f'],
+    bg: '#10261a',
+  },
+}
+
+/** How dark the forest's shade is at its darkest (the cave's is `lit.black`, near 1): only a faint tint. */
+const FOREST_SHADE = 0.28
+
+/** The forest's rooms that stay lit and its corridors (the rest are the shaded patches): about two rooms in five are shaded. */
+const forestLit = (inside: PlaceInteriorOf<'cave'>, depth: number): ReadonlySet<number> => {
+  const plan = inside.state.plan
+  const lit = new Set<number>()
+  if (!plan) return lit
+  const spaces = plan.rooms.length + plan.links.length
+  for (let i = 0; i < spaces; i++) if (i >= plan.rooms.length || hash2(i, depth, 11) >= 0.4) lit.add(i)
+  return lit
+}
+
+/** Which look a place's floor has: an Explorers floor takes its theme's, every other place the cave's. */
+export const placeLook = (g: Pick<Game, 'explorers'>): ExplorerThemeId => (g.explorers ? themeOf(g.explorers.depth) : 'cave')
+
 /**
  * How far a south wall's top reaches over the floor, in px: the walls stand
  * up toward the camera, so the floor's last px before one are hidden behind
@@ -98,50 +175,51 @@ const FACE = CAVE_FACE.length
 const SOUTH_LIP = 6
 
 /** The rock of a wall's top at (x, y). */
-const wallTop = (x: number, y: number) => {
+const wallTop = (look: FloorLook, x: number, y: number) => {
   const n = hash2(Math.floor(x / 6), Math.floor(y / 5), 3) * 0.6 + hash2(x, y, 4) * 0.4
-  return n > 0.62 ? '#241c1a' : n < 0.25 ? '#140f0f' : '#1c1515'
+  return n > 0.62 ? look.top[0] : n < 0.25 ? look.top[1] : look.top[2]
 }
 
 /**
  * A dungeon floor: rock all around, its wall's face showing above each north
  * edge (strata and cracks, lit at the top), each south wall's top over the
  * floor's last px (`SOUTH_LIP`), and the floor itself, dirt with pebbles and a
- * few pits.
+ * few pits (or, in Explorers' open air, grass and moss under hedges and trunks).
  */
-const bakeCave = (floor: readonly ArenaShape[]): Baked => {
+const bakeCave = (floor: readonly ArenaShape[], look: FloorLook): Baked => {
+  const FACE = look.face.length
   const r = rasterize(floor, 40)
   const canvas = paint(r.w, r.h, (px, py) => {
     const x = px + r.x0
     const y = py + r.y0
     if (!r.at(px, py)) {
       // The wall's top, with a lit lip where it drops to the floor.
-      if (r.at(px, py + 1)) return '#3a302a'
-      return wallTop(x, y)
+      if (r.at(px, py + 1)) return look.lip
+      return wallTop(look, x, y)
     }
     // A south wall's top over the floor, lit along its edge, and the floor darkening up to it.
     let south = 0
     for (let d = 1; d <= SOUTH_LIP + 2 && !south; d++) if (!r.at(px, py + d)) south = d
-    if (south && south < SOUTH_LIP - 1) return wallTop(x, y)
-    if (south === SOUTH_LIP - 1) return '#3a302a'
-    if (south === SOUTH_LIP) return '#5a4a3e'
-    if (south === SOUTH_LIP + 1) return '#2a221c'
-    if (south === SOUTH_LIP + 2) return '#352c26'
+    if (south && south < SOUTH_LIP - 1) return wallTop(look, x, y)
+    if (south === SOUTH_LIP - 1) return look.lip
+    if (south === SOUTH_LIP) return look.hi
+    if (south === SOUTH_LIP + 1) return look.shade1
+    if (south === SOUTH_LIP + 2) return look.shade2
     let k = 0
     for (let d = 1; d <= FACE && !k; d++) if (!r.at(px, py - d)) k = d
     if (k) {
       // One px wide and rare: wider cracks ran together into black blocks on a corridor's narrow wall.
       const crack = hash2(x, 0, 9) < 0.05 && k > 2
       const strata = (k + Math.floor(hash2(Math.floor(x / 7), 1, 5) * 2)) % 3 === 0
-      return crack ? '#1e1814' : CAVE_FACE[Math.min(FACE - 1, k - 1 + (strata ? 1 : 0))]!
+      return crack ? look.crack : look.face[Math.min(FACE - 1, k - 1 + (strata ? 1 : 0))]!
     }
-    if (!r.at(px - 1, py) || !r.at(px + 1, py) || !r.at(px, py + 1)) return '#2a221c'
-    if (!r.at(px - 2, py) || !r.at(px + 2, py) || !r.at(px, py + 2)) return '#352c26'
+    if (!r.at(px - 1, py) || !r.at(px + 1, py) || !r.at(px, py + 1)) return look.shade1
+    if (!r.at(px - 2, py) || !r.at(px + 2, py) || !r.at(px, py + 2)) return look.shade2
     const h = hash2(x, y, 6)
-    if (h < 0.018) return '#2a221e'
-    if (h > 0.993) return '#8a7462'
+    if (h < 0.018) return look.pit
+    if (h > 0.993) return look.fleck
     const n = hash2(Math.floor((x + 400) / 9), Math.floor((y + 400) / 7), 1) * 0.6 + hash2(Math.floor((x + 400) / 4), Math.floor((y + 400) / 3), 2) * 0.4
-    return n > 0.6 ? '#504438' : n < 0.3 ? '#3e342e' : '#463b33'
+    return n > 0.6 ? look.ground[0] : n < 0.3 ? look.ground[1] : look.ground[2]
   })
   return { canvas, x: r.x0, y: r.y0 }
 }
@@ -218,13 +296,13 @@ export const dropPlaceFloor = () => {
   baked = null
 }
 
-const bakedFloor = (inside: PlaceInterior) => {
+const bakedFloor = (inside: PlaceInterior, look: ExplorerThemeId) => {
   if (baked?.layout === inside.layout) return baked
   if (inside.id === 'graveyard') {
     const both = bakeGraveyard(inside.layout.floor, inside.state.graves, inside.state.keystone)
     baked = { layout: inside.layout, floor: both.floor, fence: both.fence }
   } else {
-    baked = { layout: inside.layout, floor: bakeCave(inside.layout.floor), fence: null }
+    baked = { layout: inside.layout, floor: bakeCave(inside.layout.floor, LOOKS[look]), fence: null }
   }
   return baked
 }
@@ -318,11 +396,11 @@ const drawCloudWall = (ctx: Ctx, inside: PlaceInterior, camX: number, camY: numb
 /* ---------------- Interiors ---------------- */
 
 /** The ground under a place: the sky, or the baked floor over its surroundings. Replaces the map while inside. */
-export const drawPlaceFloor = (ctx: Ctx, inside: PlaceInterior, camX: number, camY: number, w: number, h: number, t: number) => {
+export const drawPlaceFloor = (ctx: Ctx, inside: PlaceInterior, camX: number, camY: number, w: number, h: number, t: number, look: ExplorerThemeId = 'cave') => {
   if (inside.id === 'sky') return drawSky(ctx, inside, camX, camY, w, h, t)
-  ctx.fillStyle = inside.id === 'graveyard' ? '#17121f' : '#1c1515'
+  ctx.fillStyle = inside.id === 'graveyard' ? '#17121f' : LOOKS[look].bg
   ctx.fillRect(0, 0, w, h)
-  const b = bakedFloor(inside).floor
+  const b = bakedFloor(inside, look).floor
   ctx.drawImage(b.canvas, Math.round(inside.x + b.x - camX), Math.round(inside.y + b.y - camY))
 }
 
@@ -419,7 +497,7 @@ const drawKeystoneAura = (ctx: Ctx, inside: PlaceInteriorOf<'graveyard'>, t: num
 export const drawPlaceOver = (ctx: Ctx, g: Game, camX: number, camY: number) => {
   const inside = g.place.inside
   if (!inside) return
-  const fence = inside.id === 'graveyard' ? bakedFloor(inside).fence : null
+  const fence = inside.id === 'graveyard' ? bakedFloor(inside, 'cave').fence : null
   if (fence) ctx.drawImage(fence.canvas, Math.round(inside.x + fence.x), Math.round(inside.y + fence.y))
   if (inside.id === 'sky') drawCloudWall(ctx, inside, camX, camY, g.view.w, g.view.h)
 }
@@ -559,6 +637,10 @@ export const drawPlaceDark = (ctx: Ctx, g: Game, camX: number, camY: number, t: 
   const inside = g.place.inside
   if (!inside || inside.id === 'sky') return
   if (inside.id === 'cave') {
+    // An Explorers floor's dark is its theme's: none in the field, faint patches in the forest, all of it in the cave.
+    const dark = g.explorers ? EXPLORER_THEMES[themeOf(g.explorers.depth)].dark : 'full'
+    if (dark === 'none') return
+    if (dark === 'patchy') return void drawCaveDark(ctx, g, inside, camX, camY, t, { black: FOREST_SHADE, litRooms: forestLit(inside, g.explorers!.depth) })
     drawCaveEyes(ctx, g, inside, drawCaveDark(ctx, g, inside, camX, camY, t), camX, camY, t)
     return
   }

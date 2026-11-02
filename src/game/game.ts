@@ -298,6 +298,7 @@ export const createRun = (view: Game['view'], seed: number, setups: readonly Pla
     legendScene: null,
     coop: coop ? createCoopState(players.length) : null,
     training: null,
+    explorers: null,
   }
   for (const p of players) {
     g.player = p

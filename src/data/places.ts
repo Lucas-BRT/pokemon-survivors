@@ -92,10 +92,8 @@ export const CAVE = {
   floors: PROCGEN.cave ? 3 : 2,
   /** Seconds the floor's title card holds the dungeon still ("Dark Cave B1F"). */
   card: 1.5,
-  /** Radius of the light around the player; Fire types carry a flame, Electric types Flash. */
+  /** Radius of the light around a Pokémon with none of its own; the others' are in `data/pokemonLight.ts`. */
   light: 72,
-  fireLight: 104,
-  electricLight: 96,
   stairsRadius: 10,
   /** Seconds left when the wind warns ("Something's stirring…", "It's getting closer!", "It's right nearby!"). */
   wind: PROCGEN.cave ? CAVE_GEN.wind : ([40, 20, 8] as const),

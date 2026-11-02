@@ -34,6 +34,13 @@ export const CHANGELOG: readonly ChangelogUpdate[] = [
     ],
     changes: [
       {
+        title: { pt: 'Cada Pokémon ilumina a caverna do seu jeito', en: 'Every Pokémon lights the cave its own way', es: 'Cada Pokémon ilumina la cueva a su manera' },
+        notes: [
+          { pt: 'Quem carrega uma chama (Charmander, Cyndaquil, Charizard…) ou carga elétrica (Pikachu, Lanturn…) ilumina mais forte; fogo só de tipo não conta: Torchic ilumina como um Pokémon comum.', en: 'Pokémon that carry a flame (Charmander, Cyndaquil, Charizard…) or an electric charge (Pikachu, Lanturn…) light the dark more strongly; fire as a type alone does not count: Torchic lights like any other Pokémon.', es: 'Los Pokémon que llevan una llama (Charmander, Cyndaquil, Charizard…) o carga eléctrica (Pikachu, Lanturn…) iluminan con más fuerza; el tipo fuego solo no cuenta: Torchic ilumina como cualquier otro Pokémon.' },
+          { pt: 'Morcegos como Zubat enxergam sem luz: alcance enorme, mas fraco, e não iluminam nada para os outros. Inimigos com chama ou carga também iluminam a própria região.', en: 'Bats like Zubat see without light: a huge but faint reach, and they light nothing for others. Wild Pokémon with a flame or charge light their own corner of the dark too.', es: 'Los murciélagos como Zubat ven sin luz: alcance enorme pero tenue, y no iluminan nada para otros. Los enemigos con llama o carga también iluminan su zona.' },
+        ],
+      },
+      {
         title: { pt: 'Labirinto de sebes gigante: desafios e segredos', en: 'Giant hedge maze: challenges and secrets', es: 'Laberinto de setos gigante: desafíos y secretos', fr: 'Labyrinthe de haies géant : défis et secrets', zh: '巨大樹籬迷宮：挑戰與祕密' },
         notes: [
           { pt: 'O labirinto é gerado do zero: 29×29 células (cerca de 1850 px), corredores de 48 px, 4 a 5 entradas e um pátio aberto no meio com o baú do coração, cercado por quatro alas diferentes (corredores longos, matagal de becos, salões e um jardim). Fica numa área reservada do mapa, sem pedras nem árvores em volta.', en: 'The maze is generated from scratch: 29×29 cells (about 1850 px), 48 px corridors, 4 to 5 ways in and an open courtyard in the middle with the heart’s chest, ringed by four different wings (long avenues, a thicket of dead ends, halls and a garden). It stands in a cleared area of the map, with no rocks or trees around it.', es: 'El laberinto se genera desde cero: 29×29 celdas (unos 1850 px), pasillos de 48 px, de 4 a 5 entradas y un patio abierto en el centro con el cofre del corazón, rodeado de cuatro alas distintas (pasillos largos, maleza de callejones, salones y un jardín). Está en una zona despejada del mapa, sin rocas ni árboles alrededor.' },

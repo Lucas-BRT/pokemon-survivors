@@ -194,16 +194,27 @@ const mapOf = (spaces: readonly Space[], doors: readonly Door[]): SpaceMap => {
   return { spaces, doors, neighbors }
 }
 
+/** A room's space: its shape's pieces when it has them. They overlap at their joins, so the area is counted on a 2 px grid, each overlap once. */
+const roomSpace = (r: Rect, pieces: readonly Shape[] | null | undefined): Space => {
+  if (!pieces) return makeSpace('room', [{ kind: 'rect', x: r.x, y: r.y, w: r.w, h: r.h }])
+  const space = makeSpace('room', pieces)
+  if (pieces.length < 2) return space
+  const { x0, y0, x1, y1 } = space.bounds
+  let cells = 0
+  for (let y = y0 + 1; y < y1; y += 2) for (let x = x0 + 1; x < x1; x += 2) if (pieces.some((s) => shapeSdf(s, x, y) <= 0)) cells++
+  return { ...space, area: cells * 4 }
+}
+
 /**
  * The spaces of a dungeon floor (`dungeon.ts`): its rooms (index = the room's) then its corridors (index = `rooms.length` + the link's),
  * with a door where each corridor leaves each of its two rooms. Built once per floor.
  */
-export const spacesOf = (plan: Pick<DungeonFloor, 'rooms' | 'links'>): SpaceMap => {
+export const spacesOf = (plan: Pick<DungeonFloor, 'rooms' | 'links' | 'shapes'>): SpaceMap => {
   const known = floors.get(plan)
   if (known) return known
   const rect = (r: Rect): Shape => ({ kind: 'rect', x: r.x, y: r.y, w: r.w, h: r.h })
   const spaces: Space[] = [
-    ...plan.rooms.map((r) => makeSpace('room', [rect(r)])),
+    ...plan.rooms.map((r, i) => roomSpace(r, plan.shapes?.[i])),
     ...plan.links.map((l) => ({ ...makeSpace('corridor', corridorFloor(plan.rooms, l.rects).map(rect)), walk: wayBetweenDoors(plan.rooms, l) })),
   ]
   const doors: Door[] = plan.links.flatMap((l, i) => {

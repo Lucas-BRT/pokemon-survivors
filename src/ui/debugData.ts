@@ -1,3 +1,4 @@
+import { ENEMY_LIGHT, LIGHT_PROFILES } from '../data/pokemonLight'
 import { CAVE_LEVELS } from '../data/caveLevels'
 import { CAVE_SHOP } from '../data/caveShop'
 import { LIGHT_FIELD, LIGHT_KINDS } from '../data/lightSources'
@@ -29,6 +30,8 @@ const TABLES: Record<string, object> = {
   CAVE_SHOP,
   LIGHT_KINDS,
   LIGHT_FIELD,
+  LIGHT_PROFILES,
+  ENEMY_LIGHT,
   CAVE_LEVELS,
   PLACE,
   GRAND,
@@ -77,10 +80,11 @@ const WHEN: ReadonlyArray<readonly [RegExp, When]> = [
   [/^CAVE_SHOP\.sources$/, 'test'],
   [/^LIGHT_KINDS\./, 'live'],
   [/^LIGHT_FIELD\./, 'captured'],
+  [/^(LIGHT_PROFILES|ENEMY_LIGHT)\./, 'live'],
   [/^CAVE\.floors$/, 'unused'],
   [/^CAVE\.lit\./, 'split'],
   [/^CAVE\.card$/, 'floor'],
-  [/^CAVE\.(light|fireLight|electricLight|stairsRadius|wind|monsterHouse|chestRadius|chestTime|sight|phase)/, 'live'],
+  [/^CAVE\.(light|stairsRadius|wind|monsterHouse|chestRadius|chestTime|sight|phase)/, 'live'],
   [/^CAVE_SHOP\.(chance|shinyChance|shinyFrom|gemsPerPrize)$/, 'floor'],
   [/^CAVE_SHOP\./, 'live'],
   [/^CAVE_GEN\.(floorTime|chamberTime)/, 'floor'],

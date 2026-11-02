@@ -1,3 +1,4 @@
+import { LIGHT_PROFILES } from '../../data/pokemonLight'
 import { ACHIEVEMENT_IDS, ACHIEVEMENTS, MEDAL_EGG, MEDAL_REWARD, MEDALS, TITLE_IDS, type AchievementDef, type AchievementId } from '../../data/achievements'
 import { DAILY_POOL, MISSION_SLOTS, WEEKLY_POOL, type MissionTemplate } from '../../data/missions'
 import { BIOME_LENGTH, BIOME_ORDER, BIOMES, WEATHER_IDS, type WeatherId } from '../../data/biomes'
@@ -417,8 +418,8 @@ const places = (locale: Locale, m: SiteMessages) => {
       p.cave({
         floors: CAVE.floors,
         light: CAVE.light,
-        fire: CAVE.fireLight,
-        electric: CAVE.electricLight,
+        fire: LIGHT_PROFILES.blaze.range,
+        electric: LIGHT_PROFILES.spark.range,
         time: PLACES.cave.time,
         wind: new Intl.ListFormat(m.lang.tag, { type: 'conjunction' }).format(CAVE.wind.map((s) => `${s}s`)),
         house: CAVE.monsterHouse,

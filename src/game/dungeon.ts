@@ -22,6 +22,11 @@ export type Link = { a: number; b: number; path: readonly Pt[]; rects: readonly 
 
 export type DungeonFloor = {
   rooms: readonly Rect[]
+  /**
+   * Rooms that aren't rectangles (the AltCaves, `altCaves.ts`): room `i`'s floor as convex pieces that don't overlap, `null` for a
+   * plain rectangle. Its `rooms[i]` is then a rectangle inside the shape (the corridors, the nav graph and the rocks work from it).
+   */
+  shapes?: readonly (readonly Poly[] | null)[]
   links: readonly Link[]
   start: Pt
   stairs: Pt
@@ -75,6 +80,24 @@ const DOOR_INSET = DUNGEON.corridor / 2 + 14
 const center = (r: Rect): Pt => [dm.round(r.x + r.w / 2), dm.round(r.y + r.h / 2)]
 
 const inRect = (r: Rect, x: number, y: number) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
+
+/** Whether (x, y) is inside the simple polygon (even-odd rule). */
+const inPoly = ({ pts }: Poly, x: number, y: number) => {
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [ax, ay] = pts[j]!
+    const [bx, by] = pts[i]!
+    if (ay > y !== by > y && x < ax + ((y - ay) / (by - ay)) * (bx - ax)) inside = !inside
+  }
+  return inside
+}
+
+/** Whether (x, y) is on room `i`'s floor: its rectangle, or any piece of its shape. */
+const inRoom = (floor: Pick<DungeonFloor, 'rooms' | 'shapes'>, i: number, x: number, y: number) => {
+  if (inRect(floor.rooms[i]!, x, y)) return true
+  const pieces = floor.shapes?.[i]
+  return !!pieces && pieces.some((q) => inPoly(q, x, y))
+}
 
 /** A spot inside room `r`, `inset` px from its walls. */
 const spotIn = (rng: Rng, r: Rect, inset: number): Pt => [dm.round(range(rng, r.x + inset, r.x + r.w - inset)), dm.round(range(rng, r.y + inset, r.y + r.h - inset))]
@@ -515,8 +538,8 @@ export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLev
  * corridor's index, or -1 in the rock between. Two walkers in the same space
  * can see each other (`CAVE.sight`). Loops only, so it can run for every walker every tick.
  */
-export const spaceAt = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, x: number, y: number) => {
-  for (let i = 0; i < floor.rooms.length; i++) if (inRect(floor.rooms[i]!, x, y)) return i
+export const spaceAt = (floor: Pick<DungeonFloor, 'rooms' | 'links' | 'shapes'>, x: number, y: number) => {
+  for (let i = 0; i < floor.rooms.length; i++) if (inRoom(floor, i, x, y)) return i
   for (let l = 0; l < floor.links.length; l++) {
     const rects = floor.links[l]!.rects
     for (let i = 0; i < rects.length; i++) if (inRect(rects[i]!, x, y)) return floor.rooms.length + l
@@ -525,7 +548,7 @@ export const spaceAt = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, x: number,
 }
 
 /** Whether a Pokémon at floor px (x, y) sleeps: it stands in a room the team (`visited`, room indices) hasn't entered. */
-export const dormant = (floor: Pick<DungeonFloor, 'rooms'>, visited: readonly number[], x: number, y: number) => {
+export const dormant = (floor: Pick<DungeonFloor, 'rooms' | 'shapes'>, visited: readonly number[], x: number, y: number) => {
   const room = roomAt(floor, x, y)
   return room >= 0 && !visited.includes(room)
 }
@@ -534,10 +557,10 @@ export const dormant = (floor: Pick<DungeonFloor, 'rooms'>, visited: readonly nu
 const BODY = 8
 
 /** Whether a shot at (x, y) is over the floor (a room or a corridor) rather than in the rock. */
-export const onFloor = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, x: number, y: number) => spaceAt(floor, x, y + BODY) >= 0
+export const onFloor = (floor: Pick<DungeonFloor, 'rooms' | 'links' | 'shapes'>, x: number, y: number) => spaceAt(floor, x, y + BODY) >= 0
 
 /** Whether the straight line between two points stays on the floor: nothing of the rock in the way. Loops only. */
-export const clearShot = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, ax: number, ay: number, bx: number, by: number) => {
+export const clearShot = (floor: Pick<DungeonFloor, 'rooms' | 'links' | 'shapes'>, ax: number, ay: number, bx: number, by: number) => {
   const d = dm.hypot(bx - ax, by - ay)
   const n = Math.ceil(d / 6)
   for (let i = 1; i < n; i++) if (!onFloor(floor, ax + ((bx - ax) * i) / n, ay + ((by - ay) * i) / n)) return false
@@ -545,7 +568,7 @@ export const clearShot = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, ax: numb
 }
 
 /** Index of the room holding (x, y), or -1. */
-export const roomAt = (floor: Pick<DungeonFloor, 'rooms'>, x: number, y: number) => floor.rooms.findIndex((r) => inRect(r, x, y))
+export const roomAt = (floor: Pick<DungeonFloor, 'rooms' | 'shapes'>, x: number, y: number) => floor.rooms.findIndex((_, i) => inRoom(floor, i, x, y))
 
 /**
  * A corridor's mouth, in px: a funnel reaching `into` the room and `out` along
@@ -576,8 +599,9 @@ const rectPoly = (r: Rect): Poly => ({ kind: 'poly', pts: [[r.x, r.y], [r.x + r.
  * The floor's shapes for `game/arenaFloor.ts`: every room and corridor stretch
  * as a convex polygon, and a funnel at each end of every corridor (`MOUTH`).
  */
-export const floorShapes = (floor: Pick<DungeonFloor, 'rooms' | 'links'>): Poly[] => [
-  ...[...floor.rooms, ...floor.links.flatMap((l) => l.rects)].map(rectPoly),
+export const floorShapes = (floor: Pick<DungeonFloor, 'rooms' | 'links' | 'shapes'>): Poly[] => [
+  ...floor.rooms.flatMap((r, i) => [rectPoly(r), ...(floor.shapes?.[i] ?? [])]),
+  ...floor.links.flatMap((l) => l.rects).map(rectPoly),
   ...floor.links.flatMap((l) => {
     const n = l.path.length
     return [mouth(floor.rooms[l.a]!, l.path[0]!, l.path[1]!), mouth(floor.rooms[l.b]!, l.path[n - 1]!, l.path[n - 2]!)]

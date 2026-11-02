@@ -7,6 +7,8 @@ import type { HitKind } from '../data/abilities'
 import type { RiftLegend } from '../data/rifts'
 import type { WaveLegend } from '../data/legendBosses'
 import type { PlayableId } from '../data/hatchlings'
+import type { ExplorerThemeId } from '../data/explorers'
+import type { LightProfileId } from '../data/pokemonLight'
 import type { MegaId } from '../data/megas'
 import type { LegendId } from '../data/legends'
 import type { AbilityId } from '../data/abilities'
@@ -244,6 +246,56 @@ export const pt = {
   },
 
   /** Arena (Versus, `game/versus.ts`): the lobby's tile, its screen, a match's HUD, toasts and pick tray, the end screen and the room in Arena mode. */
+  explorers: {
+    entry: 'Explorers',
+    fresh: 'NOVO',
+    title: 'EXPLORERS',
+    tagline: 'Descida sem fim',
+    intro: 'Uma run só dentro de Dungeons: desça andar após andar, sem mapa aberto. Cada andar nasce povoado e nada reaparece.',
+    how: 'Como jogar',
+    steps: [
+      { title: 'Escada aberta', text: 'Desça quando quiser; limpar o andar dá XP e prêmios.' },
+      { title: 'Nada nasce', text: 'Cada andar é povoado uma vez. Acabou? Siga em frente.' },
+      { title: 'Relógio', text: 'Zerou, acabou a run: vento ou desabamento.' },
+      { title: 'Chefes', text: 'Subchefe a cada 5 andares; chefe a cada 20, e o tema muda.' },
+    ] satisfies readonly { title: string; text: string }[],
+    partner: 'Seu parceiro',
+    sight: 'Como ele enxerga',
+    stats: { range: 'Alcance', glow: 'Brilho' },
+    lights: {
+      plain: { name: 'Luz comum', text: 'Não emite luz própria.' },
+      ember: { name: 'Chama pequena', text: 'Alcance um pouco maior e mais forte.' },
+      blaze: { name: 'Fogo forte', text: 'Ilumina longe e forte.' },
+      spark: { name: 'Carga elétrica', text: 'Brilha com a própria carga.' },
+      sonar: { name: 'Sonar', text: 'Enxerga muito longe, mas fraco, e não ilumina para os outros.' },
+    } satisfies Record<LightProfileId, { name: string; text: string }>,
+    track: 'A descida',
+    trackNote: 'Os 20 andares de cada tema',
+    legend: { floor: 'Andar', sub: 'Subchefe', boss: 'Chefe' },
+    themeHead: 'Os temas, em ordem',
+    foes: 'Pokémon',
+    themes: {
+      field: { name: 'Campo', clock: 'Vento', text: 'Insetos e aves iniciais em salas amplas.' },
+      forest: { name: 'Floresta', clock: 'Vento', text: 'Pokémon mais fortes entre árvores e rochas.' },
+      cave: { name: 'Caverna', clock: 'Desabamento', text: 'O escuro de verdade: a luz do seu Pokémon manda.' },
+    } satisfies Record<ExplorerThemeId, { name: string; clock: string; text: string }>,
+    /** The pill under the run's timer: the theme, the floor and what presses the clock, with the time left. */
+    hud: (theme: string, floor: string, clock: string, time: string) => `${theme} ${floor} · ${clock.toLowerCase()} ${time}`,
+    best: (floor: number) => `Recorde: andar ${floor}`,
+    noBest: 'Sem recorde ainda',
+    play: 'Descer',
+    back: 'Voltar',
+    hintKeys: 'Enter desce · Esc volta',
+    hintTouch: 'Toque em Descer para começar',
+    end: {
+      title: 'FIM DA DESCIDA',
+      reached: (floor: number, theme: string) => `Você chegou ao andar ${floor} (${theme}).`,
+      newBest: 'Novo recorde!',
+      best: (floor: number) => `Recorde: andar ${floor}`,
+      again: 'Descer de novo',
+      lobby: 'Sair',
+    },
+  },
   versus: {
     entry: 'Arena',
     fresh: 'NOVO',

@@ -1,11 +1,12 @@
 import { context2d, createCanvas } from '../engine/pixelart'
-import { caveLight } from '../game/cave'
+import { lightOf, lightRange } from '../game/cave'
+import { ENEMY_LIGHT, profileOf } from '../data/pokemonLight'
+import { ENEMIES } from '../data/enemies'
 import { floorShapes, roomAt, type DungeonFloor } from '../game/dungeon'
 import { LIGHT_KINDS } from '../data/lightSources'
 import { caveLevel } from '../data/caveLevels'
 import { atDepth, seenLevels } from '../game/lightSources'
 import { chamberOf, hostOf, regionSdf, spacesOf, type Bounds, type Region, type SpaceMap } from '../game/spaces'
-import { CAVE } from '../data/places'
 import type { PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
 import { lit, roomLevels } from './caveSight'
@@ -96,7 +97,14 @@ export const shownLevels = (map: SpaceMap): readonly number[] | undefined => sho
  * Draws the cave's dark over the world and returns the lights' circles
  * (x, y, radius in world px), which the eyes of what stands outside them need.
  */
-export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>, camX: number, camY: number, t: number) => {
+export type DarkOptions = {
+  /** The darkest the dark gets, 0 to 1 (`lit.black` by default). */
+  black?: number
+  /** Spaces (a floor's rooms, then its corridors) that are fully lit whatever their sources say: the forest's clearings. */
+  litRooms?: ReadonlySet<number>
+}
+
+export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>, camX: number, camY: number, t: number, opts: DarkOptions = {}) => {
   const { w, h } = g.view
   const s = inside.state
   const plan = s.plan
@@ -137,6 +145,11 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
     })
   }
 
+  for (const space of opts.litRooms ?? []) {
+    const sp = spaces?.spaces[space]
+    if (sp) areas.push({ region: sp.region, bounds: sp.bounds, level: 1 })
+  }
+
   // A glow shows once its room has been entered (a corridor's, once a player is near).
   const glows = (x: number, y: number) => {
     if (!plan) return true
@@ -148,12 +161,24 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
   // Point lights.
   const points: Point[] = []
   const litBy: Array<readonly [number, number, number]> = []
-  const reach = caveLight(g)
-  const flicker = reach >= CAVE.fireLight ? Math.round(Math.sin(t * 9) + Math.sin(t * 23)) : 0
+  // Each player's light is its Pokémon's (`data/pokemonLight.ts`): a flame flickers, a bat's sonar is wide and faint.
+  const flame = Math.round(Math.sin(t * 9) + Math.sin(t * 23))
   for (const p of g.players) {
     if (p.gone) continue
-    points.push({ x: p.x, y: p.y - 10, r: (reach + flicker) * lit.playerScale, i: 1 })
+    const reach = lightRange(g, p)
+    const own = lightOf(g, p)
+    points.push({ x: p.x, y: p.y - 10, r: (reach + (own.emits ? flame : 0)) * lit.playerScale, i: Math.min(1, own.glow) })
     litBy.push([p.x, p.y - 10, reach * 0.8])
+  }
+  // A wild emitter (a flame, a charge) lights its own corner of the dark, once its room has been entered.
+  let emitters = 0
+  for (const e of g.enemies) {
+    if (emitters >= ENEMY_LIGHT.max) break
+    if (e.dying >= 0) continue
+    const prof = profileOf(ENEMIES[e.kind].dex)
+    if (!prof.emits || e.x < camX - 120 || e.y < camY - 120 || e.x > camX + w + 120 || e.y > camY + h + 120 || !glows(e.x, e.y)) continue
+    points.push({ x: e.x, y: e.y - 8, r: prof.range * ENEMY_LIGHT.range + flame, i: Math.min(1, prof.glow * ENEMY_LIGHT.glow) })
+    emitters++
   }
   // A light source gives light only while it is on (touched, as the Nightmare's lanterns are): off, nothing at all. On, it has its aura,
   // weaker the farther its space is from the players (`factor`), eased in and blinking out at the end.
@@ -193,7 +218,7 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
   const mh = Math.ceil(h / 2)
   const m = lightmap(mw, mh)
   const data = m.image.data
-  const black = lit.black
+  const black = opts.black ?? lit.black
   for (let my = 0; my < mh; my++) {
     const wy = camY + my * 2 + 1
     for (let mx = 0; mx < mw; mx++) {

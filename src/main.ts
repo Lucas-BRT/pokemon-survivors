@@ -64,7 +64,7 @@ import { makeShiny } from './game/shiny'
 import { MAP_EVENT_KINDS, MAP_EVENTS, spawnMapEvent, type MapEventKind } from './game/mapEvents'
 import { MEOWTH_DEX } from './game/mapEventRules'
 import { FIELD, FIELD_MISSION_KINDS, TOGEPI_DEX, type FieldMissionKind } from './game/fieldMissionRules'
-import { advancePhase, banishOffer, chooseOffer, createGame, offerAbilities, playerDex, rerollOffers, skipLevelUp, step, takeBerryLevelUps } from './game/game'
+import { advancePhase, banishOffer, chooseOffer, createGame, offerAbilities, playerDex, rerollOffers, skipLevelUp, step, takeBerryLevelUps, type StepInput } from './game/game'
 import { applyBuild, setDummies, setLens, startTraining } from './game/training'
 import { buildOf } from './game/builds'
 import { TRAINING } from './data/training'
@@ -88,6 +88,9 @@ import { riftDevTools } from './game/riftDev'
 import { placeDevTools } from './game/placeDev'
 import { applyAltCave, applyDebug, goToMaze, parseDebug } from './game/debugStart'
 import type { AltCaveId } from './game/altCaves'
+import { createExplorersGame, startExplorers, stepExplorers } from './game/explorersRun'
+import { guardOf, speciesAt, themeOf } from './game/explorers'
+import { explorersEnd, explorersScreen } from './ui/explorers'
 import { placeFeedback } from './ui/places'
 import { landmarkFeedback, mazeFeedback } from './ui/landmarks'
 import { PLACES } from './data/places'
@@ -393,6 +396,8 @@ type Run = {
   coop: CoopRun | null
   /** A Dojo session (`game/training.ts`): never banked, ranked nor reported as a run (null otherwise). */
   training: DojoRun | null
+  /** An Explorers descent (`game/explorersRun.ts`): never banked, ranked nor reported; the floor whose species' sheets are streaming. */
+  explorers?: { depth: number }
 }
 
 /** The shell's side of a Dojo session: its panel, when it began and whether a build was saved, for its `dojo_end`. */
@@ -678,6 +683,7 @@ const showTitle = (opts: { intro?: boolean; focus?: LobbyFocus; shop?: ShopTrip;
       coop: coopUrl() ? () => enterCoop({ room: null, invitedBy: null }) : undefined,
       arena: () => showArena(),
       arenaHub: (tab) => showArenaHub(tab),
+      explorers: () => showExplorers(),
       dojo: () => showDojo(),
       meadow,
     }, opts),
@@ -958,6 +964,7 @@ const endRun = () => {
   if (!run) return
   if (run.coop) return endCoopRun(run, run.coop)
   if (run.training) return endDojo(run, run.training)
+  if (run.explorers) return endExplorers(run)
   bankRun(run, wonRun(run.game))
   reportRun(run)
   rankRun(run)
@@ -1412,6 +1419,101 @@ const startDojo = async (starter: PlayableId) => {
   }
 }
 
+/** The Explorers screen: the lobby's partner (never a legend) and the mode's rules; Descer starts a descent. */
+const showExplorers = () => {
+  endRun()
+  const saved = loadSave().partner
+  setScreen(explorersScreen(ui, input, isLegend(saved) ? 'charmander' : saved, { play: (id) => void startExplorersRun(id), back: () => showTitle({ focus: 'explorers' }) }))
+}
+
+/** The species sheets floor `depth` and the next one need, with their guards. */
+const explorersDex = (depth: number): Dex[] => [...new Set([depth, depth + 1].flatMap((d) => [...speciesAt(d), ...(guardOf(d) ? [guardOf(d)!] : [])]).map((id) => ENEMIES[id].dex))]
+
+/** A descent (`game/explorersRun.ts`): the lobby's partner on floor 1, never banked, ranked, reported or replayed. */
+const startExplorersRun = async (starter: PlayableId) => {
+  if (launching) return
+  launching = true
+  try {
+    setScreen(null)
+    endRun()
+    const loading = loadingScreen()
+    ui.append(loading)
+    const save = loadSave()
+    const shiny = playsShiny(save, starter)
+    const game = createExplorersGame(starter, view, Date.now(), save.ranks, { shiny, evo: [...save.evo], caps: capLevel(save.caps, starter) })
+    const me = localPlayer(game)
+    me.shiny = shiny
+    me.luckyShiny = false
+    game.events.length = 0
+    await loadRunSheets(familySheets(starter, shiny), explorersDex(1))
+    loading.remove()
+    const start: ReplayStart = { seed: 0, starter, difficulty: save.difficulty, ranks: save.ranks, shiny, luckyEgg: false, outbreak: null, halloween: false, bag: [], view: { ...view } }
+    const r: Run = {
+      game,
+      hud: runHud(game),
+      overlay: null,
+      shown: null,
+      closeText: null,
+      paid: 0,
+      candies: 0,
+      reported: true,
+      missionsBefore: [],
+      recorded: null,
+      unlocked: [],
+      reward: 0,
+      rewardEggs: 0,
+      rewardItems: [],
+      hatchery: { steps: 0, eggs: 0 },
+      convertedEggs: { full: [], cap: [] },
+      dexBase: save.dex,
+      recorder: startRecording(start),
+      ranked: null,
+      rank: null,
+      bestBefore: 0,
+      challenge: null,
+      companion: runCompanion(me),
+      sprites: { needs: [], always: [...familyDex(starter), ...explorersDex(1)] },
+      coop: null,
+      training: null,
+      explorers: { depth: 1 },
+    }
+    if (r.companion) r.sprites.always.push(r.companion.dex)
+    run = r
+    syncSprites()
+    resetMemoryPeaks()
+    resetRunFrames(frames)
+    syncRunWatch()
+  } finally {
+    launching = false
+  }
+}
+
+/** Streams the sheets of the floor an Explorers descent just reached and of the next one. */
+const syncExplorersSprites = (r: Run) => {
+  const depth = r.game.explorers?.depth
+  if (!r.explorers || depth === undefined || r.explorers.depth === depth) return
+  r.explorers.depth = depth
+  const me = localPlayer(r.game)
+  r.sprites.always = [...familyDex(me.starter), playerDex(r.game), ...explorersDex(depth)]
+  syncSprites()
+}
+
+/** Ends a descent's session: nothing banked, ranked or reported. */
+const endExplorers = (r: Run) => {
+  r.overlay?.dispose()
+  r.closeText?.()
+  r.hud.dispose()
+  clearToasts(ui)
+  run = null
+  syncRunWatch()
+}
+
+/** Leaves a descent for the lobby (the end screen's Sair, the pause menu's quit). */
+const leaveExplorers = () => {
+  endRun()
+  showTitle({ focus: 'explorers' })
+}
+
 /** Leaves the Dojo for the lobby (the panel's Sair, the pause menu's quit). */
 const leaveDojo = () => {
   endRun()
@@ -1550,13 +1652,19 @@ const syncOverlay = (r: Run) => {
         // Only from the pause: a late press must never flip a level-up to playing (unrecorded) or end the run under it.
         // A fresh canvas too: the player's way out of a world that stopped drawing behind the pause (`freshCanvas`).
         resume: () => g.phase === 'paused' && ((g.phase = 'playing'), freshCanvas()),
-        quit: () => g.phase === 'paused' && (r.training ? leaveDojo() : afterRun(() => showMenu())),
+        quit: () => g.phase === 'paused' && (r.training ? leaveDojo() : r.explorers ? leaveExplorers() : afterRun(() => showMenu())),
         settings: (back) => runSettings(r, back),
         report: bugReportsEnabled ? (back) => bugReportForm(ui, input, back) : null,
       })
       break
     case 'gameover':
     case 'victory':
+      if (r.explorers && g.explorers) {
+        clearToasts(ui)
+        const ex = g.explorers
+        r.overlay = explorersEnd(ui, input, { depth: ex.deepest, theme: themeOf(ex.deepest), again: () => void startExplorersRun(me.starter), lobby: () => leaveExplorers() })
+        break
+      }
       if (c?.versus) {
         // The match's last toasts would sit over the results.
         clearToasts(ui)
@@ -1984,6 +2092,7 @@ const handleEvent = (r: Run, e: GameEvent) => {
       playSfx('evolve')
       return news(h('span', { class: 'item-toast' }, shopIcon('maxRevive'), rich(t().toast.maxRevive)), 3400)
     case 'gameover':
+      if (r.explorers) return playSfx('gameOver')
       bankRun(r, true)
       recordProgress(r)
       reportRun(r, e)
@@ -3384,7 +3493,9 @@ const frame = (now: number) => {
         if (specialQueued) recordEvent(r.recorder, ['special'])
         if (megaQueued) recordEvent(r.recorder, ['mega'])
         if (lungeQueued) recordEvent(r.recorder, ['lunge'])
-        step(g, { move: recordStep(r.recorder, view, input.readMove()), special: specialQueued, mega: megaQueued, lunge: lungeQueued }, STEP)
+        const tick: StepInput = { move: recordStep(r.recorder, view, input.readMove()), special: specialQueued, mega: megaQueued, lunge: lungeQueued }
+        if (g.explorers) stepExplorers(g, [tick], STEP)
+        else step(g, tick, STEP)
         specialQueued = false
         megaQueued = false
         lungeQueued = false
@@ -3413,6 +3524,7 @@ const frame = (now: number) => {
     if (run === r) {
       syncOverlay(r)
       r.training?.panel.tick?.(t)
+      syncExplorersSprites(r)
       // Toasts and banners wait out menus, level-ups and evolutions with their clocks stopped.
       tickToasts(ui, dt, g.phase !== 'playing')
       // Redraw only when the simulation advanced: halves the work on 120 Hz phones and
@@ -4402,6 +4514,8 @@ if (import.meta.env.DEV) {
       terrain: (kind?: SolidKind | 'lake', dy?: number) => (run ? devTerrain(run.game, kind, dy) : console.warn('ps: start a run first')),
       /** `ps.altCave('tour', 2)` builds an AltCave (`tour`, `sources`, `dark`: hand-built floors to test the light in) 2 floors down in the running cave. */
       altCave: (id: AltCaveId = 'tour', depth = 0) => withRun((g) => void (applyAltCave(g, id, depth) || console.warn('ps: enter the cave first'))),
+      /** `ps.explorers(20)` turns the running run into an Explorers run (dungeon-only) starting at that floor (1 without an argument): start a run first. */
+      explorers: (depth = 1) => withRun((g) => startExplorers(g, depth)),
       /** `ps.maze()` sets the team down outside the nearest big hedge maze's first way in (`ps.maze(true)` a step inside), whatever the distance. */
       maze: (inside = false) => withRun((g) => void (goToMaze(g, inside) || console.warn('ps: no maze found'))),
       /** `ps.landmark('cottage')` walks you to the nearest landmark (`tunnel`, `ruins`, `camp`; any without an argument), 60 px south of it. */

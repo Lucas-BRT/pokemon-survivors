@@ -17998,6 +17998,268 @@ button.hall-tile:hover {
 
 /* ---------- Arena (Versus): the lobby's tile, its screen, the room, a match's HUD, pick tray and end (ui/arena.ts, ui/versus*.ts) ---------- */
 
+/* Explorers' NOVO tag in the stairs' green. */
+.lobby-new.explorers-new {
+  background: #48a060;
+}
+
+/* ---------- Explorers outside a run (ui/explorers.ts): it reuses the Arena screen's boxes, hero, pips and steps ---------- */
+
+.arena-tagline.explorers-tagline {
+  background: linear-gradient(90deg, #48a060 50%, #2a2438 50%);
+}
+
+.explorers-icon {
+  width: 24px;
+  height: 22px;
+  margin-right: 8px;
+  vertical-align: middle;
+  image-rendering: pixelated;
+}
+
+.explorers-hero .arena-hero-name {
+  font-size: 9px;
+  overflow-wrap: normal;
+}
+
+.explorers-chip {
+  padding: 2px 5px 1px;
+  font-family: var(--title);
+  font-size: 7px;
+  font-style: normal;
+  color: #fff;
+  background: #48a060;
+  border: 2px solid #283040;
+  border-radius: 6px;
+}
+
+/* How the partner sees: the circle it lights in the dark (against the widest any Pokémon has), beside two bars. */
+.explorers-sight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explorers-sight .arena-stats {
+  flex: 1;
+}
+
+.explorers-lamp {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  background: #14101c;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+}
+
+.explorers-lamp i {
+  position: absolute;
+  inset: calc((100% - var(--r)) / 2);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 232, 150, var(--g)) 0%, rgba(255, 232, 150, calc(var(--g) * 0.55)) 55%, rgba(255, 232, 150, 0) 72%);
+}
+
+.explorers-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The track: floors 1 to 20 of a block, the sub-bosses and the boss with their faces. */
+.explorers-floors {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explorers-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 40px;
+  background: var(--dk-surface-1, #f0f0f8);
+  border: 2px solid var(--dk-line, #c8d0e0);
+  border-radius: 6px;
+}
+
+.explorers-cell i {
+  width: 6px;
+  height: 6px;
+  background: var(--dk-line, #c8d0e0);
+  border-radius: 50%;
+}
+
+.explorers-cell img {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+.explorers-cell small {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-family: var(--title);
+  font-size: 6px;
+  color: var(--dk-ink-3, #707088);
+}
+
+.explorers-cell.cell-subboss {
+  border-color: #48a060;
+  background: color-mix(in srgb, #48a060 20%, var(--dk-surface-1, #f0f0f8));
+}
+
+.explorers-cell.cell-boss {
+  border-color: #f8c030;
+  background: color-mix(in srgb, #f8d030 24%, var(--dk-surface-1, #f0f0f8));
+}
+
+.explorers-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 4px 0 0;
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.explorers-key::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  background: var(--dk-surface-1, #f0f0f8);
+  border: 2px solid var(--dk-line, #c8d0e0);
+  border-radius: 2px;
+}
+
+.explorers-key.key-sub::before {
+  border-color: #48a060;
+}
+
+.explorers-key.key-boss::before {
+  border-color: #f8c030;
+}
+
+/* The three themes, in order. */
+.explorers-themes ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explorers-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--dk-surface-1, #f0f0f8);
+  border: 2px solid var(--dk-line, #c8d0e0);
+  border-radius: 6px;
+}
+
+.explorers-theme.theme-field {
+  border-top-color: #78c850;
+}
+
+.explorers-theme.theme-forest {
+  border-top-color: #388840;
+}
+
+.explorers-theme.theme-cave {
+  border-top-color: #585068;
+}
+
+.explorers-theme-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  font-family: var(--title);
+  font-size: 8px;
+}
+
+.explorers-theme p {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--dk-ink-2, #505870);
+}
+
+.explorers-folk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  margin-top: auto;
+}
+
+.explorers-folk img {
+  width: 26px;
+  height: 26px;
+  image-rendering: pixelated;
+}
+
+.explorers-gap {
+  font-family: var(--title);
+  font-size: 9px;
+  color: var(--dk-ink-3, #707088);
+}
+
+.explorers-guard img {
+  border-radius: 4px;
+}
+
+.explorers-guard.guard-sub img {
+  outline: 2px solid #48a060;
+}
+
+.explorers-guard.guard-boss img {
+  outline: 2px solid #f8c030;
+}
+
+.explorers-best {
+  margin: 0;
+  font-family: var(--title);
+  font-size: 8px;
+  text-align: center;
+  color: var(--dk-ink-3, #707088);
+}
+
+@media (max-width: 759px) {
+  .explorers-themes ol {
+    grid-template-columns: 1fr;
+  }
+}
+
+.explorers-partner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.explorers-partner img {
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
+}
+
 /* The Arena's NOVO tag in the Arena's red, beside co-op's blue. */
 .lobby-new.arena-new {
   background: #f05858;

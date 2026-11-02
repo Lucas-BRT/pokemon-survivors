@@ -2,6 +2,7 @@ import { COOP } from '../data/coop'
 import { VERSUS } from '../data/versus'
 import { driveBots } from './versusBots'
 import { stepVersus } from './versus'
+import { stepExplorers } from './explorersRun'
 import { isPingKind, isQuickChat, pingAt, sayQuick, voteSurrender, type PingKind, type QuickChat } from './versusSocial'
 import { MEGAS, type MegaId } from '../data/megas'
 import { castVote, countAway, leaveRun, setAway, updateVote, worldHeld } from './coop'
@@ -327,6 +328,7 @@ export const stepTick = (g: Game, entries: readonly TickEntry[]) => {
   else if (!worldHeld(g)) {
     // A Versus match runs its own step (`versus.ts`).
     if (g.versus) stepVersus(g, inputs, TICK)
+    else if (g.explorers) stepExplorers(g, inputs, TICK)
     else stepTeam(g, inputs, TICK)
     // Screens the step opened for away players are picked at once.
     for (const p of g.players) if (p.away && onScreen(p)) autoPick(g, p)

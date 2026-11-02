@@ -1,5 +1,5 @@
 import { CAVE } from '../data/places'
-import { caveLight } from '../game/cave'
+import { lightRange } from '../game/cave'
 import { levelOf, levelsOf } from '../game/caveLevel'
 import { LIGHT_FIELD } from '../data/lightSources'
 import { atDepth, onSources, type LightSource } from '../game/lightSources'
@@ -28,11 +28,21 @@ export const fogKey = (mx: number, my: number) => (mx & 0xffff) * 0x10000 + (my 
 /** Walls show this many px past a space's floor (the rock's face), so the light reveals them but not what lies behind. */
 const WALL = 14
 
+/** Room `i`'s box: its rectangle, grown to hold a shaped room's pieces. */
+const boxOf = (plan: DungeonFloor, i: number): Rect => {
+  const r = plan.rooms[i]!
+  const pts = plan.shapes?.[i]?.flatMap((q) => q.pts)
+  if (!pts) return r
+  const x0 = Math.min(r.x, ...pts.map((p) => p[0]))
+  const y0 = Math.min(r.y, ...pts.map((p) => p[1]))
+  return { x: x0, y: y0, w: Math.max(r.x + r.w, ...pts.map((p) => p[0])) - x0, h: Math.max(r.y + r.h, ...pts.map((p) => p[1])) - y0 }
+}
+
 /** What a player at floor px (x, y) can see into: their room, or else the corridor stretches they stand in. */
 export const spacesAround = (plan: DungeonFloor, x: number, y: number, out: Rect[] = []) => {
   out.length = 0
   const room = spaceAt(plan, x, y)
-  if (room >= 0 && room < plan.rooms.length) return (out.push(plan.rooms[room]!), out)
+  if (room >= 0 && room < plan.rooms.length) return (out.push(boxOf(plan, room)), out)
   for (const l of plan.links) for (const r of l.rects) if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) out.push(r)
   return out
 }
@@ -50,16 +60,16 @@ export const caveFog = (g: Game, plan: DungeonFloor, visited: readonly number[],
   for (const i of visited) {
     if (done.has(i)) continue
     done.add(i)
-    const r = plan.rooms[i]!
+    const r = boxOf(plan, i)
     // One cell past the room each way: the map draws the rim of its walls there.
     const x0 = Math.floor((cx + r.x) / SEEN_SCALE) - 1
     const x1 = Math.floor((cx + r.x + r.w) / SEEN_SCALE) + 1
     for (let my = Math.floor((cy + r.y) / SEEN_SCALE) - 1; my <= Math.floor((cy + r.y + r.h) / SEEN_SCALE) + 1; my++) for (let mx = x0; mx <= x1; mx++) seen.add(fogKey(mx, my))
   }
-  const rad = Math.ceil(caveLight(g) / SEEN_SCALE)
   const around: Rect[] = []
   for (const p of g.players) {
     if (p.gone) continue
+    const rad = Math.ceil(lightRange(g, p) / SEEN_SCALE)
     spacesAround(plan, p.x - cx, p.y - cy, around)
     const px = Math.floor(p.x / SEEN_SCALE)
     const py = Math.floor(p.y / SEEN_SCALE)

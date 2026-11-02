@@ -5,7 +5,8 @@ import { createGame } from './game'
 import { ALT_CAVES, ALT_CAVE_IDS } from './altCaves'
 import { relayCave, stagePlan } from './cave'
 import { buildNavGraph, pathField } from './dungeonGraph'
-import { roomAt, type DungeonFloor, type Rect } from './dungeon'
+import { floorShapes, roomAt, type DungeonFloor, type Rect } from './dungeon'
+import { fits } from './arenaFloor'
 import { enterPlace } from './placeInterior'
 import { hostOf, spacesOf } from './spaces'
 
@@ -38,6 +39,50 @@ describe.each(ALT_CAVE_IDS)('the AltCave "%s"', (id) => {
     expect(roomAt(plan, ...plan.stairs)).toBe(plan.stairsRoom)
     for (const [x, y] of [...plan.sources, ...plan.rocks]) expect(hostOf(map, x, y), `${x},${y} is in the rock`).toBeGreaterThanOrEqual(0)
     expect(plan.sizes).toHaveLength(plan.rooms.length)
+  })
+
+  it('keeps each shaped room\'s rectangle inside its shape, and its outline inside the room', () => {
+    plan.rooms.forEach((r, i) => {
+      if (!plan.shapes?.[i]) return
+      for (const [x, y] of [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]] as const) expect(roomAt(plan, x, y), `room ${i}'s corner`).toBe(i)
+      // Each corner of a piece, pulled 2 px toward that piece's middle (on the edge itself the inside test is a coin flip), is still this room's.
+      for (const { pts } of plan.shapes[i]!) {
+        const mx = pts.reduce((a, p) => a + p[0], 0) / pts.length
+        const my = pts.reduce((a, p) => a + p[1], 0) / pts.length
+        for (const [x, y] of pts) {
+          const d = Math.hypot(mx - x, my - y)
+          expect(roomAt(plan, x + ((mx - x) * 2) / d, y + ((my - y) * 2) / d), `room ${i}'s outline`).toBe(i)
+        }
+      }
+    })
+  })
+
+  it('lets a body walk the whole of every shaped room (the walls fit it inside one piece at a time)', () => {
+    const pieces = floorShapes(plan)
+    const R = 22 // as wide as a corridor lets a body be
+    const STEP = 6
+    plan.rooms.forEach((rect, i) => {
+      if (!plan.shapes?.[i]) return
+      const all = plan.shapes[i]!.flatMap((q) => q.pts)
+      const x0 = Math.min(...all.map((p) => p[0]))
+      const y0 = Math.min(...all.map((p) => p[1]))
+      const cols = Math.ceil((Math.max(...all.map((p) => p[0])) - x0) / STEP) + 1
+      const rows = Math.ceil((Math.max(...all.map((p) => p[1])) - y0) / STEP) + 1
+      const ok = (c: number, r: number) => roomAt(plan, x0 + c * STEP, y0 + r * STEP) === i && pieces.some((s) => fits(s, x0 + c * STEP, y0 + r * STEP, R))
+      const start = [Math.round((rect.x + rect.w / 2 - x0) / STEP), Math.round((rect.y + rect.h / 2 - y0) / STEP)] as const
+      const seen = new Set<number>([start[1] * cols + start[0]])
+      const todo = [start]
+      for (let k = todo.pop(); k; k = todo.pop()) {
+        for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const c = k[0] + dc
+          const r = k[1] + dr
+          if (c < 0 || r < 0 || c >= cols || r >= rows || seen.has(r * cols + c) || !ok(c, r)) continue
+          seen.add(r * cols + c)
+          todo.push([c, r])
+        }
+      }
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (ok(c, r)) expect(seen.has(r * cols + c), `room ${i}: ${x0 + c * STEP},${y0 + r * STEP} is cut off`).toBe(true)
+    })
   })
 
   it('is walkable: the nav graph reaches every room from the start', () => {

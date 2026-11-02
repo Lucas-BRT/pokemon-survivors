@@ -15,7 +15,7 @@ import { pendingPicks, playsShiny } from '../game/shinyPicks'
 import type { ArenaHubTab } from './arenaHub'
 import { pollToVote, supporterCount, tierRank, type WallEntry } from '../game/supporters'
 import { formatNumber, locale, t } from '../i18n'
-import { arenaIcon, bulbIcon, coinIcon, coopIcon, discordIcon, eggIcon, giftIcon, heartIcon, itemIcon, medalIcon, newsIcon, pawIcon, pokeballIcon, ribbonIcon, socialIcon, sparkleIcon, supporterIcon, surveyIcon } from '../render/art'
+import { explorersIcon, arenaIcon, bulbIcon, coinIcon, coopIcon, discordIcon, eggIcon, giftIcon, heartIcon, itemIcon, medalIcon, newsIcon, pawIcon, pokeballIcon, ribbonIcon, socialIcon, sparkleIcon, supporterIcon, surveyIcon } from '../render/art'
 import { logoScale, titleLogo } from '../render/logo'
 import { drawPokemon, loadedSprites, loadSpecies, type Dex } from '../render/sprites'
 import type { LobbyNpc, Place } from '../render/titleScene'
@@ -69,6 +69,7 @@ export type LobbyFocus =
   | 'ideas'
   | 'coop'
   | 'arena'
+  | 'explorers'
   | 'play'
   | 'explore'
   | SocialId
@@ -159,6 +160,8 @@ export type TitleActions = {
   arena: () => void
   /** The Arena's hub on one of its tabs: the Estádio's boards (all but Jogar, which is `arena`). */
   arenaHub: (tab: ArenaHubTab) => void
+  /** Explorers (the dungeon-only mode): its screen. */
+  explorers: () => void
   /** The Dojo, once Machoke said hello: who trains (the partner select in its Dojo guise, `game/training.ts`). */
   dojo: () => void
   meadow: Meadow
@@ -732,6 +735,34 @@ const coopTile = () => {
   return el
 }
 
+/** Set once the player opens Explorers on this device: the tile's NOVO tag goes for good. */
+const EXPLORERS_SEEN = 'ps:explorersSeen'
+
+const explorersSeen = () => {
+  try {
+    return localStorage.getItem(EXPLORERS_SEEN) !== null
+  } catch {
+    return true
+  }
+}
+
+const markExplorersSeen = () => {
+  try {
+    localStorage.setItem(EXPLORERS_SEEN, '1')
+  } catch {
+    // Private modes may refuse: the tag just shows again next time.
+  }
+}
+
+/** The Explorers tile (stairs into the dark), tagged NOVO until first opened; a rail tile on phones held upright. */
+const explorersTile = (rails: boolean) => {
+  const m = t().explorers
+  const icon = explorersIcon()
+  const el = rails ? railTile('explorers', h('img', { src: icon, alt: '' }), m.entry, m.entry) : dockTile('explorers', icon, m.entry, 'K')
+  if (!explorersSeen()) el.append(h('em', { class: 'lobby-new explorers-new' }, m.fresh))
+  return el
+}
+
 /** Set once the player opens the Arena on this device: the tile's NOVO tag goes for good. */
 const ARENA_SEEN = 'ps:arenaSeen'
 
@@ -828,7 +859,7 @@ const heldMove = (input: Input, arrows: boolean): Vec => {
 }
 
 /** Shortcuts, shown as key hints on what they press (`C` belongs to the Trainer chip; P, E and Space are taken by the run's controls, and E talks to a shopkeeper the partner stands by). */
-const HOTKEYS: Readonly<Record<string, LobbyFocus>> = { KeyF: 'festival', KeyJ: 'coop', KeyV: 'arena', KeyG: 'gifts', KeyN: 'news', KeyX: 'pokedex', KeyO: 'eggs', KeyL: 'mart', KeyT: 'dojo', KeyR: 'ranking', KeyI: 'ideas', KeyM: 'missions', KeyH: 'hall' }
+const HOTKEYS: Readonly<Record<string, LobbyFocus>> = { KeyF: 'festival', KeyJ: 'coop', KeyV: 'arena', KeyK: 'explorers', KeyG: 'gifts', KeyN: 'news', KeyX: 'pokedex', KeyO: 'eggs', KeyL: 'mart', KeyT: 'dojo', KeyR: 'ranking', KeyI: 'ideas', KeyM: 'missions', KeyH: 'hall' }
 
 /** The "Falar · E" bubble over a shopkeeper while the strolling partner stands close (a tap on it talks too); `label` holds its word (`talkLabel`). */
 const talkPrompt = (onTalk: () => void, label: HTMLElement) => h('button', { class: 'plaza-talk box hidden', type: 'button', onclick: onTalk }, label, h('span', { class: 'key-hint' }, 'E'))
@@ -1029,6 +1060,7 @@ export const titleScreen = (
     ideas: () => ideas && openOver(ideas),
     coop: () => (markCoopSeen(), coop?.()),
     arena: () => visitShop('stadium'),
+    explorers: () => (markExplorersSeen(), actions.explorers()),
     play: actions.play,
     explore: () => enterExplore(),
     tiktok: () => openSocial('tiktok'),
@@ -1096,7 +1128,7 @@ export const titleScreen = (
       : landscape
         ? []
         : [h('div', { class: 'lobby-community' }, pressable(discordCard(), 'discord'), ...SOCIAL_IDS.map((id) => pressable(socialCard(id), id)))]
-    const dojo = rails ? [pressable(dojoTile(true), 'dojo')] : []
+    const dojo = rails ? [pressable(dojoTile(true), 'dojo'), pressable(explorersTile(true), 'explorers')] : []
     const side = h('div', { class: 'lobby-side' }, ...(rails ? [gift] : []), hall, ...invites, ...dojo, ...community, ...(rails ? [explore] : []))
     // A friend's invite needs the room of a banner: under the partner on the rails, under the Hall elsewhere.
     const notice = rails ? h('div', { class: 'lobby-notice' }) : side
@@ -1108,7 +1140,7 @@ export const titleScreen = (
       pressable(dockTile('eggs', eggIcon('rare'), m.eggs, 'O', ready, ready > 0 ? `${m.eggs}: ${m.eggsReady(ready)}` : m.eggs), 'eggs'),
       pressable(dockTile('mart', coinIcon(2), m.mart, 'L'), 'mart'),
       // Phones held upright have it on the rail: their tab bar is full.
-      ...(rails ? [] : [pressable(dojoTile(false), 'dojo')]),
+      ...(rails ? [] : [pressable(dojoTile(false), 'dojo'), pressable(explorersTile(false), 'explorers')]),
       ...(ranking ? [pressable(dockTile('ranking', medalIcon('gold'), m.ranking, 'R'), 'ranking')] : []),
       ...(ideas ? [pressable(dockTile('ideas', bulbIcon(), m.ideas, 'I'), 'ideas')] : []),
     ]

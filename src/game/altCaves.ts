@@ -1,5 +1,6 @@
 import { DUNGEON, type DungeonFloor, type Link, type Rect } from './dungeon'
-import type { Pt } from '../data/arenas'
+import type { Poly, Pt } from '../data/arenas'
+import * as dm from '../engine/dmath'
 
 /**
  * AltCaves: hand-built cave floors for testing the light, the paths and the walls, a debug room instead of a drawn floor. Each one is a
@@ -11,7 +12,12 @@ import type { Pt } from '../data/arenas'
  * they don't, the bend in the gap between them, as the generated floors do) and where the sources, the rocks, the start and the stairs are.
  */
 
-type RoomSpec = Rect & { /** How many grid cells it counts as (`DungeonFloor.sizes`). */ cells?: number }
+type RoomSpec = Rect & {
+  /** How many grid cells it counts as (`DungeonFloor.sizes`). */
+  cells?: number
+  /** The room's real floor when it isn't the rectangle (`DungeonFloor.shapes`); the rectangle must lie inside it. */
+  shape?: readonly Poly[]
+}
 
 type Spec = {
   rooms: readonly RoomSpec[]
@@ -71,8 +77,29 @@ const floorOf = (spec: Spec): DungeonFloor => {
     sizes: spec.rooms.map((r) => r.cells ?? 1),
     sanctuary: -1,
     traps: [],
+    ...(spec.rooms.some((r) => r.shape) ? { shapes: spec.rooms.map((r) => r.shape ?? null) } : {}),
   }
 }
+
+/* ---------------- Shaped rooms ---------------- */
+
+const area = (pieces: readonly Poly[]) =>
+  pieces.reduce((a, { pts }) => a + Math.abs(pts.reduce((s, [x, y], i) => s + x * pts[(i + 1) % pts.length]![1] - pts[(i + 1) % pts.length]![0] * y, 0)) / 2, 0)
+
+/**
+ * A room from convex pieces and the rectangle (inside them) the corridors work from. Pieces that join must overlap by more than a body's
+ * width (44 px here, as wide as a corridor, so whatever walks a corridor walks the join): walls fit a body inside one piece at a time.
+ */
+const shaped = (core: Rect, shape: readonly Poly[]): RoomSpec => ({ ...core, shape, cells: Math.max(1, Math.round(area(shape) / 20000)) })
+
+/** A regular polygon of `n` sides and circumradius `r` around (cx, cy), its first corner at angle `rot`; many sides make a circle. */
+const regular = (cx: number, cy: number, r: number, n: number, rot = 0): RoomSpec => {
+  const pts = Array.from({ length: n }, (_, i): Pt => [Math.round(cx + r * dm.cos(rot + (i * 2 * Math.PI) / n)), Math.round(cy + r * dm.sin(rot + (i * 2 * Math.PI) / n))])
+  const h = Math.floor((r * dm.cos(Math.PI / n)) / Math.SQRT2) - 1
+  return shaped({ x: cx - h, y: cy - h, w: 2 * h, h: 2 * h }, [{ kind: 'poly', pts }])
+}
+
+const box = (x: number, y: number, w: number, h: number): Poly => ({ kind: 'poly', pts: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]] })
 
 /* ---------------- The floors ---------------- */
 
@@ -172,13 +199,64 @@ const dark = (): DungeonFloor => {
   })
 }
 
-export type AltCaveId = 'tour' | 'sources' | 'dark'
+/** Rooms of every geometry, joined in a grid: circle, hexagon, triangle, diamond, octagon, half disc, an L, a cross and a U. */
+const shapes = (): DungeonFloor => {
+  const P = 520
+  const Q = 440
+  const UP = -Math.PI / 2
+  return floorOf({
+    rooms: [
+      regular(0, 0, 130, 24), //                       0 circle: start, one lamp
+      regular(P, 0, 120, 6), //                        1 hexagon: one lamp
+      regular(2 * P, 0, 140, 3, UP), //                2 triangle: dark, small core
+      regular(0, Q, 130, 4, UP), //                    3 diamond: one lamp
+      regular(P, Q, 170, 8, Math.PI / 8), //           4 big octagon: four lamps, rocks
+      shaped({ x: 2 * P - 50, y: Q - 40, w: 100, h: 80 }, [{ kind: 'poly', pts: [[2 * P - 150, Q - 40], [2 * P + 150, Q - 40], [2 * P + 120, Q + 40], [2 * P + 60, Q + 90], [2 * P - 60, Q + 90], [2 * P - 120, Q + 40]] }]), // 5 flat-bottomed dome: dark
+      shaped({ x: -130, y: 2 * Q - 50, w: 260, h: 100 }, [box(-130, 2 * Q - 50, 260, 100), box(-130, 2 * Q + 6, 100, 184)]), //   6 L: two lamps
+      shaped({ x: P - 150, y: 2 * Q - 40, w: 300, h: 80 }, [box(P - 150, 2 * Q - 40, 300, 80), box(P - 40, 2 * Q - 150, 80, 154), box(P - 40, 2 * Q - 4, 80, 154)]), // 7 cross: one lamp
+      shaped({ x: 2 * P - 130, y: 2 * Q + 40, w: 260, h: 70 }, [box(2 * P - 130, 2 * Q + 40, 260, 70), box(2 * P - 130, 2 * Q - 90, 70, 174), box(2 * P + 60, 2 * Q - 90, 70, 174)]), //  8 U: stairs, no lamp
+    ],
+    links: [[0, 1], [1, 2], [0, 3], [1, 4], [2, 5], [3, 4], [4, 5], [3, 6], [4, 7], [5, 8], [6, 7], [7, 8]],
+    sources: [[0, 0], [P, 0], [0, Q], [P - 80, Q - 80], [P + 80, Q - 80], [P - 80, Q + 80], [P + 80, Q + 80], [-60, 2 * Q], [90, 2 * Q], [P, 2 * Q]],
+    rocks: [[P - 130, Q], [P + 130, Q], [P, Q - 130]],
+    startRoom: 0,
+    start: [0, 60],
+    stairsRoom: 8,
+    stairs: [2 * P, 2 * Q + 75],
+  })
+}
+
+/** One lamp in the middle of rooms of nearly the same area (about 40000 px²) and different shapes: what the shape alone does to the light. */
+const equal = (): DungeonFloor => {
+  const at = (i: number) => i * 480
+  return floorOf({
+    rooms: [
+      regular(at(0), 0, 113, 24), //          circle
+      regular(at(1), 0, 100 * Math.SQRT2, 4, Math.PI / 4), // square
+      regular(at(2), 0, 124, 6), //           hexagon
+      regular(at(3), 0, 176, 3, -Math.PI / 2), // triangle
+      regular(at(4), 0, 119, 8, Math.PI / 8), //  octagon
+      shaped({ x: at(5) - 200, y: -50, w: 400, h: 100 }, [box(at(5) - 200, -50, 400, 100)]), // long rectangle 4:1
+      shaped({ x: at(6) - 120, y: -50, w: 240, h: 100 }, [box(at(6) - 120, -50, 240, 100), box(at(6) - 120, 6, 100, 204)]), // L
+    ],
+    links: [0, 1, 2, 3, 4, 5].map((i): [number, number] => [i, i + 1]),
+    sources: [0, 1, 2, 3, 4, 5, 6].map((i): Pt => [at(i), 0]),
+    startRoom: 0,
+    start: [at(0), 40],
+    stairsRoom: 6,
+    stairs: [at(6) - 70, 150],
+  })
+}
+
+export type AltCaveId = 'tour' | 'sources' | 'dark' | 'shapes' | 'equal'
 
 /** The floors, with what each one is for (the debug menu shows it). */
 export const ALT_CAVES: Record<AltCaveId, { label: string; note: string; build: () => DungeonFloor }> = {
   tour: { label: 'Tour', note: 'Every kind of space: tiny, huge, dark, lit; straight and bent corridors with sources; a zigzag of small rooms.', build: tour },
   sources: { label: 'Sources', note: 'Rooms with 0 to 8 sources, then one source in rooms from tiny to huge: how the light dilutes.', build: sources },
   dark: { label: 'Dark', note: 'Unlit rooms of growing size, one lamp in the last: how dark a room is by its size and by the floor it is on.', build: dark },
+  shapes: { label: 'Shapes', note: 'Round, hexagonal, triangular, diamond, octagonal, domed, L, cross and U rooms in a grid: the light, the walls and the paths on non-rectangular spaces.', build: shapes },
+  equal: { label: 'Equal', note: 'One lamp in the middle of rooms of the same area and different shapes (circle, square, hexagon, triangle, octagon, 4:1 rectangle, L): what the shape alone does to the light.', build: equal },
 }
 
 export const ALT_CAVE_IDS = Object.keys(ALT_CAVES) as AltCaveId[]

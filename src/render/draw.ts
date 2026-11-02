@@ -35,7 +35,7 @@ import { drawSpecialAttack, drawSpecialAura, drawSpecialGround } from './special
 import { awakeningLook, CLONE_OUTLINE, CLONE_TINT, drawLegendAura, playerSprites } from './legend'
 import { isClone } from '../game/legend'
 import { drawArena, drawRiftArrow, drawRiftFallAir, drawRiftFallGround, drawRiftFallOut, drawRiftPortal, dropArenas, riftFallLook, warmArena } from './rift'
-import { drawEntranceAir, drawEntranceGround, drawPlaceArrow, drawPlaceDark, drawPlaceFallOut, drawPlaceFloor, drawPlaceGround, drawPlaceOver, drawWings, dropPlaceFloor, placeFallLook } from './places'
+import { drawEntranceAir, drawEntranceGround, drawPlaceArrow, drawPlaceDark, drawPlaceFallOut, drawPlaceFloor, drawPlaceGround, drawPlaceOver, drawWings, dropPlaceFloor, placeFallLook, placeLook } from './places'
 import { roomOf } from '../game/room'
 import { drawLandmarkAir, drawMazeRun, drawTunnelDark, playerUnderground } from './landmarks'
 import { drawPokemon, sprites, type AnimName, type SpeciesSprites } from './sprites'
@@ -973,7 +973,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   const indoors = roomOf(g) !== null
   if (g.rift.arena?.domain) drawDomainFloor(ctx, g.rift.arena, g.rift.arena.domain, camX, camY, w, h, t)
   else if (g.rift.arena) drawArena(ctx, g.rift.arena, camX, camY, w, h, t)
-  else if (inside) drawPlaceFloor(ctx, inside, camX, camY, w, h, t)
+  else if (inside) drawPlaceFloor(ctx, inside, camX, camY, w, h, t, placeLook(g))
   else if (g.versus) drawValeFloor(ctx, g.versus.map, camX, camY, w, h)
   else drawGround(ctx, camX, camY, w, h, g.biome.id, fade)
   const upcoming = biomeAt(g.time + BIOME_WARMUP)

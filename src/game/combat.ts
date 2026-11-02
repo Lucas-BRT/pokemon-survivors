@@ -278,7 +278,7 @@ export const hurtPlayer = (
   // Falling in a rift arena or a place isn't the end: the rift throws the player back out, a rescue brings them back
   // (in co-op once the last one standing falls; until then they faint).
   if (g.rift.arena && (g.coop === null || !teammateStanding(g))) return fallInArena(g)
-  if (g.place.inside && (g.coop === null || !teammateStanding(g))) return fallInPlace(g)
+  if (g.place.inside && g.explorers === null && (g.coop === null || !teammateStanding(g))) return fallInPlace(g)
   // Sturdy holds before a Max Revive (the Bag's), which goes before a held Revive.
   if (!abilityHolds(g) && !tryMaxRevive(g) && !tryRevive(g)) {
     // Versus: knocked out until the respawn, by nobody (the wild, a boss's shot).

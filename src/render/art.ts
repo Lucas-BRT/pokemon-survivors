@@ -1144,6 +1144,40 @@ const ARENA_SHIELD = [
 
 export const arenaIcon = () => toIconUrl('arena', () => art(ARENA_SHIELD, { 1: '#202030', 2: '#4890f0', 3: '#f05858', 4: '#f8d030', 5: '#ffffff' }))
 
+/** Explorers: stairs going down, a lantern's glint above them. 1 outline, 4 the dark, 5 a step's top, 6 the stone below it, 7 the glint. */
+const EXPLORERS_STAIRS = [
+  '11111111111111',
+  '14444444444441',
+  '15554444447741',
+  '16664444444441',
+  '16665554444441',
+  '16666664444441',
+  '16666665554441',
+  '16666666664441',
+  '16666666665551',
+  '16666666666661',
+  '16666666666661',
+  '16666666666661',
+  '11111111111111',
+]
+
+export const explorersIcon = () => toIconUrl('explorers', () => art(EXPLORERS_STAIRS, { 1: '#1a1a28', 4: '#26304a', 5: '#f0e4b0', 6: '#8a8068', 7: '#f8d030' }))
+
+/** A clock: the floor's time. 1 outline, 2 the face, 3 the hands. */
+const CLOCK = [
+  '...11111...',
+  '.112222211.',
+  '.122232221.',
+  '12222322221',
+  '12222333221',
+  '12222222221',
+  '.122222221.',
+  '.112222211.',
+  '...11111...',
+]
+
+export const clockIcon = () => toIconUrl('clock', () => art(CLOCK, { 1: '#202030', 2: '#f0f0f8', 3: '#e04848' }))
+
 /** The room's host: a small gold crown. 1 outline, 2 gold, 3 shine, 4 the gem. */
 const CROWN = [
   '1...1...1',
