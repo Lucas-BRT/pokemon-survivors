@@ -168,6 +168,7 @@ import { tmPick } from './ui/tmPick'
 import { caveShopPick } from './ui/caveShop'
 import { keepDebugHolds, toggleDebugMenu } from './ui/debugMenu'
 import { DEBUG_RUN } from './game/debugTune'
+import { METRICS, sample } from './game/debugMetrics'
 import { restore, snapshot } from './game/snapshot'
 import { isSettingsOpen, openSettings, settings, toggleMute } from './ui/settings'
 import { mapEventFeedback } from './ui/mapEvents'
@@ -3351,6 +3352,7 @@ const frame = (now: number) => {
   const realDt = Math.min(1, (now - last) / 1000)
   last = now
   const t = now / 1000
+  if (import.meta.env.DEV) sample(METRICS.frame, realDt * 1000)
   // Gamepads type the keyboard's codes: menus get confirm/back, a run its special, Mega and lunge, an Arena match its kit.
   input.poll(run?.game.phase !== 'playing' ? 'menu' : run.game.versus ? 'arena' : 'run')
   setActivePad(input.activePad())
@@ -3368,6 +3370,7 @@ const frame = (now: number) => {
     const g = r.game
     let steps = 0
     if (g.phase === 'playing' || g.phase === 'evolving') {
+      const stepFrom = performance.now()
       advancePacer(pace, dt * DEBUG_RUN.scale, STEP)
       // The debug menu's "avançar": a paused run plays this many ticks at once.
       if (DEBUG_RUN.steps > 0) {
@@ -3386,6 +3389,10 @@ const frame = (now: number) => {
         lungeQueued = false
         pace.acc -= STEP
         steps++
+      }
+      if (import.meta.env.DEV && steps > 0) {
+        sample(METRICS.step, performance.now() - stepFrom)
+        sample(METRICS.steps, steps)
       }
       // A ranked run's replay goes to the API in chunks as it plays; past its victory (endless), its result is kept now and then in case the page dies.
       if (steps > 0 && r.ranked) {
@@ -3413,13 +3420,20 @@ const frame = (now: number) => {
       if (steps > 0 || dirty || now - backAt < HELD_BACK || now - runDrawnAt >= HELD_KEEP) {
         dirty = false
         runDrawnAt = now
+        const drawFrom = performance.now()
         render(ctx, g, t, { ...settings(), companion: r.companion })
+        if (import.meta.env.DEV) sample(METRICS.draw, performance.now() - drawFrom)
         const stick = input.readStick()
         if (stick && g.phase === 'playing') drawJoystick(ctx, stick, cssScale)
         r.hud.update(g)
       }
       // Only frames that moved the run tell how the device keeps up.
       if (steps > 0) {
+        if (import.meta.env.DEV) {
+          const work = performance.now() - started
+          sample(METRICS.work, work)
+          if (work > METRICS.worst.ms) METRICS.worst = { ms: work, at: g.time }
+        }
         observeFrame(governor, performance.now() - started, now - lastDrawn)
         lastDrawn = now
       } else lastDrawn = NaN

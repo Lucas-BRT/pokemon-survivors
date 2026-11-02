@@ -21,6 +21,7 @@ import type { Game } from '../game/types'
 import { LIT_DEFAULTS, lit, retune, roomLevel, type Lit } from '../render/caveSight'
 import { DEBUG_VIEW, setView, VIEW_GROUPS } from '../render/debugOverlay'
 import { copyText, renderData } from './debugData'
+import { renderMetrics } from './debugMetrics'
 import { h } from './dom'
 
 /**
@@ -38,7 +39,7 @@ type Ctl =
   | { t: 'toggle'; label: string; get: () => boolean; set: (on: boolean) => void }
   | { t: 'select'; label: string; options: readonly string[]; get: () => string; set: (v: string) => void }
   | { t: 'number'; label: string; get: () => number; set: (n: number) => void }
-  | { t: 'custom'; render: (into: HTMLElement, say: (text: string) => void) => void }
+  | { t: 'custom'; render: (into: HTMLElement, say: (text: string) => void, live: (refresh: () => void) => void) => void }
   | { t: 'buttons'; items: ReadonlyArray<{ label: string; run: () => string | void }> }
 
 type Tab = { id: string; label: string; controls: (g: Game | undefined) => Ctl[] }
@@ -526,7 +527,9 @@ const viewTab: Tab = {
 
 const dataTab: Tab = { id: 'data', label: 'Data', controls: () => [{ t: 'custom', render: (into, say) => renderData(into, say) }] }
 
-const TABS: readonly Tab[] = [lightTab, caveTab, spawnTab, mazeTab, worldTab, playerTab, viewTab, gameTab, dataTab]
+const metricsTab: Tab = { id: 'metrics', label: 'Metrics', controls: (g) => [{ t: 'custom', render: (into, say, live) => renderMetrics(into, g, say, live) }] }
+
+const TABS: readonly Tab[] = [lightTab, caveTab, spawnTab, mazeTab, worldTab, playerTab, viewTab, metricsTab, gameTab, dataTab]
 
 /* ---------------- The panel ---------------- */
 
@@ -592,7 +595,7 @@ const draw = (body: HTMLElement, tab: Tab, g: Game | undefined, say: (text: stri
         break
       }
       case 'custom':
-        c.render(into, say)
+        c.render(into, say, (f) => infos.push(f))
         break
       case 'buttons':
         into.append(

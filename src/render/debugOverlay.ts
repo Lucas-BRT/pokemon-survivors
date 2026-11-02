@@ -15,7 +15,7 @@ import { seenCells } from './mazeSight'
 
 /**
  * Dev-only overlays the debug menu turns on (`ui/debugMenu.ts`, tab View): what the simulation sees and collides with, drawn over the
- * world in screen px. They come in groups (`VIEW_GROUPS`): bodies, spawns, the cave, the hedge maze, the world and performance. Nothing
+ * world in screen px. They come in groups (`VIEW_GROUPS`): bodies, spawns, the cave, the hedge maze and the world; the counters and the frame graph are switched on from the Metrics tab. Nothing
  * turns them on in a production build.
  */
 
@@ -99,13 +99,6 @@ export const VIEW_GROUPS: ReadonlyArray<{ group: string; items: ReadonlyArray<{ 
       { key: 'terrainGrid', label: 'Terrain cells (288 px) with their coordinates' },
       { key: 'events', label: 'Map events, the place entrance and their radii' },
       { key: 'grid', label: 'World grid (every 100 px) and a cross on the player' },
-    ],
-  },
-  {
-    group: 'Performance',
-    items: [
-      { key: 'counters', label: 'Counters (foes, moves, pickups, clock, seed)' },
-      { key: 'fps', label: 'Frame time graph' },
     ],
   },
 ]
