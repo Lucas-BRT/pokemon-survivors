@@ -69,6 +69,9 @@ export const mazeFeedback = (root: HTMLElement, moment: MazeMoment, n: number, o
       return say(m.heart)
     case 'trap':
       return playSfx('whoosh')
+    case 'enter':
+      playSfx('select')
+      return say(m.enter)
   }
 }
 

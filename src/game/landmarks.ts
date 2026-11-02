@@ -43,11 +43,13 @@ export type PlayerLandmarks = {
   transit: { x0: number; y0: number; x1: number; y1: number; t: number; cell: number } | null
   /** The mouth the player came out of: it doesn't take them back until they step out of it. */
   lock: { cell: number; mouth: number } | null
+  /** The big hedge maze (its site `key`) the player stands in, -1 outside: the horde and the spawns look away from whoever is inside (`mazeRun.ts`). */
+  maze: number
 }
 
 export const createLandmarkState = (): LandmarkState => ({ looted: new Set(), seen: new Set(), opened: 0 })
 
-export const createPlayerLandmarks = (): PlayerLandmarks => ({ opening: null, entering: null, transit: null, lock: null })
+export const createPlayerLandmarks = (): PlayerLandmarks => ({ opening: null, entering: null, transit: null, lock: null, maze: -1 })
 
 const notify = (g: Game, landmark: LandmarkId, moment: LandmarkMoment) => g.events.push({ kind: 'landmark', landmark, moment })
 

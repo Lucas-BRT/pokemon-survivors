@@ -4,6 +4,8 @@ import { createGame } from './game'
 import { inBox, nearestMaze } from './grandMaze'
 import { spawnMapEvent } from './mapEvents'
 import { evict } from './mazeNav'
+import { hordeShut } from './players'
+import { updateSpawner } from './spawner'
 import { mazeLocked, updateMazes, type MazeRun } from './mazeRun'
 import type { Game } from './types'
 
@@ -112,6 +114,25 @@ describe('the big hedge maze at play', () => {
     expect(evict(g, wild)).toBe(true)
     expect(inBox(site, wild.x, wild.y)).toBe(false)
     expect(evict(g, { x: mid.x, y: mid.y, home: site.key })).toBe(false)
+  })
+
+  it('tells a player who steps in once, and pauses the horde while everyone is inside', () => {
+    const { g, site } = inMaze()
+    expect(g.player.landmark.maze).toBe(site.key)
+    expect(g.events.filter((e) => e.kind === 'maze' && e.moment === 'enter' && e.n === g.player.slot)).toHaveLength(1)
+    tick(g, 1)
+    expect(g.events.filter((e) => e.kind === 'maze' && e.moment === 'enter')).toHaveLength(1)
+    expect(hordeShut(g)).toBe(true)
+    g.time = 120
+    g.nextEvent = 1e9
+    g.enemies.length = 0
+    for (let i = 0; i < 300; i++) updateSpawner(g, 1 / 60)
+    expect(g.enemies.filter((e) => e.home === undefined)).toHaveLength(0)
+    // Out again: the horde comes back.
+    stand(g, { x: site.x - 400, y: site.y - 400 })
+    tick(g, 0.1)
+    expect(g.player.landmark.maze).toBe(-1)
+    expect(hordeShut(g)).toBe(false)
   })
 })
 

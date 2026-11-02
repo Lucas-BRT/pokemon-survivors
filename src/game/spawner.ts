@@ -14,7 +14,7 @@ import { makeShiny, rollShiny, SHINY_ODDS } from './shiny'
 import { surgeSize, TENSION_PEAK, tensionMods } from './tension'
 import { spawnPoint, updateTension } from './tensionSystem'
 import { isSpitter, makeSpitter, SPITTERS } from './spitters'
-import { anchorPlayer, onAnyScreen, playerWithin } from './players'
+import { anchorPlayer, hordeShut, onAnyScreen, playerWithin } from './players'
 import { coopScale } from './coop'
 import { COOP } from '../data/coop'
 import type { Game } from './types'
@@ -195,7 +195,9 @@ export const updateSpawner = (g: Game, dt: number) => {
   g.tension.share = 1 / tension.rate
   const spitting = spitter !== null && !finale && g.time >= spit.from
 
-  if (!finale && !bossNear && !g.endless) {
+  // Everyone inside a hedge maze: the horde pauses (the maze's own Pokémon are the only company).
+  const shut = hordeShut(g)
+  if (!finale && !bossNear && !g.endless && !shut) {
     g.tension.surge += level * dt
     if (g.tension.surge >= peak.surgeEvery) {
       g.tension.surge -= peak.surgeEvery
@@ -203,7 +205,8 @@ export const updateSpawner = (g: Game, dt: number) => {
     }
   }
 
-  g.spawnBudget += stage.rate * pressure.rate * more * tension.rate * coopScale(g, COOP.scale.spawn) * dt
+  if (shut) g.spawnBudget = 0
+  else g.spawnBudget += stage.rate * pressure.rate * more * tension.rate * coopScale(g, COOP.scale.spawn) * dt
   while (g.spawnBudget >= 1) {
     g.spawnBudget--
     if (regular >= cap) {

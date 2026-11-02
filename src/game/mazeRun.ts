@@ -7,7 +7,7 @@ import { dropItem } from './consumables'
 import { burst, floatText } from './effects'
 import { spawnEnemy } from './enemies'
 import { spawnAlpha } from './alphas'
-import { cellCenter, mazeSitesNear, type MazeSite } from './grandMaze'
+import { cellCenter, mazeSiteAtPoint, mazeSitesNear, type MazeSite } from './grandMaze'
 import type { spawnMapEvent as SpawnMapEvent } from './mapEvents'
 import { COIN_VALUES } from './meta'
 import { awardEgg, dropCoins } from './pickups'
@@ -26,7 +26,7 @@ import * as dm from '../engine/dmath'
  * (`Enemy.home`). Scenery only in co-op (`COOP_LOCKS`), like the other landmarks.
  */
 
-export type MazeMoment = 'spot' | 'key' | 'locked' | 'cache' | 'decoy' | 'ambush' | 'guard' | 'ring' | 'thief' | 'heart' | 'trap'
+export type MazeMoment = 'spot' | 'key' | 'locked' | 'cache' | 'decoy' | 'ambush' | 'guard' | 'ring' | 'thief' | 'heart' | 'trap' | 'enter'
 
 /** A chest (the heart's too): a decoy one springs a surprise instead of paying. */
 export type MazeCache = { x: number; y: number; open: boolean; t: number; decoy: EnemyId | null }
@@ -188,6 +188,7 @@ const springDecoy = (g: Game, site: MazeSite, c: MazeCache) => {
 
 /** `spawn` is the map events' (`mapEvents.ts`), handed in so this module never imports it (it would close an import cycle). */
 export const updateMazes = (g: Game, dt: number, spawn: typeof SpawnMapEvent) => {
+  trackEntries(g)
   if (coopLocked(g, 'landmarks') || roomOf(g)) return
   const woke = new Set<number>()
   for (const p of g.players) {
@@ -202,6 +203,17 @@ export const updateMazes = (g: Game, dt: number, spawn: typeof SpawnMapEvent) =>
       stepRings(g, run, dt)
       stepHidden(g, site, run)
     }
+  }
+}
+
+/** Who stands in a maze (`Player.landmark.maze`), also in co-op: crossing its hedge's gap tells that player (`slot` in the event's `n`). */
+const trackEntries = (g: Game) => {
+  const outdoors = !g.place.inside && !g.rift.arena && !roomOf(g)
+  for (const p of g.players) {
+    const key = outdoors && !p.gone ? (mazeSiteAtPoint(g.terrain.seed, p.x, p.y)?.key ?? -1) : -1
+    if (key === p.landmark.maze) continue
+    p.landmark.maze = key
+    if (key >= 0) notify(g, 'enter', p.slot)
   }
 }
 

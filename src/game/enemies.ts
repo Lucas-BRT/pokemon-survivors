@@ -194,7 +194,7 @@ export const updateEnemies = (g: Game, dt: number) => {
     // A cave room the team hasn't entered yet: its Pokémon stay put until someone steps in (or something alerts them).
     if (cave && plan && e.alert <= 0 && dormant(plan, cave.state.visited, e.x - cave.x, e.y - cave.y)) continue
     // A hidden teammate (Dig, a tunnel) is passed over for one the foe can see.
-    const p = nearestSeen(g, e.x, e.y)
+    const p = nearestSeen(g, e.x, e.y, e.home !== undefined)
     const lost = underground(g, p)
     const nav = navs?.[p.slot] ?? null
     const frozen = e.status.stun > 0 || isFrozen(e.status)

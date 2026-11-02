@@ -103,6 +103,7 @@ const HOUSE = ['..r..', '.rrr.', 'rrrrr', '.wkw.', '.wkw.']
 const TUNNEL = ['.sss.', 'sssss', 'skkks', 'skkks']
 const RUINS = ['sssss', '.s.s.', '.s.s.', 'sssss']
 const TENT = ['..o..', '.ooo.', 'oo.oo', 'oo.oo']
+const MAZE = ['ggggg', 'g...g', 'g.ggg', 'g...g', 'gggkg']
 
 const GLYPHS = lazy(() => ({
   boss: [glyph(SKULL, { w: '#f8f0e0', k: DARK }), glyph(SKULL, { w: '#f86858', k: DARK })],
@@ -119,6 +120,7 @@ const GLYPHS = lazy(() => ({
     ruins: glyph(RUINS, { s: '#d8d0c0' }),
     camp: glyph(TENT, { o: '#e89838' }),
   } satisfies Record<LandmarkId, PixelSprite>,
+  maze: glyph(MAZE, { g: '#7ee07a', k: '#1c3a20' }),
   events: {
     altar: glyph(GEM, { y: '#f8d048', e: '#ffffff' }),
     fountain: glyph(DROP, { b: '#58a8f8', w: '#e0f4ff' }),
@@ -431,33 +433,45 @@ const pickupGlyph = (p: Pickup) => {
   }
 }
 
+/** How far (world px) a maze still gets a pin on the map's rim, so one can head for it from afar. */
+const MAZE_PIN = 5000
+
 /**
- * A big hedge maze on the map: its outer hedge (always known, one can see it from outside) and, inside, only the cells a player has
- * seen (`render/mazeSight.ts`), as lit floor.
+ * The big hedge mazes on the map (`game/grandMaze.ts`): each one's footprint as a block of hedge (always known: one sees it from
+ * outside), a pin on the rim for the ones off the map, and, inside, the cells a player has seen (`render/mazeSight.ts`) as lit floor.
  */
-const drawMazeMemory = (ctx: Ctx, g: Game, v: View, x: number, y: number) => {
-  for (const site of mazeSitesNear(g.terrain.seed, x, y, S * v.scale)) {
+const drawMazes = (ctx: Ctx, g: Game, v: View, shape: MinimapShape, sprite: PixelSprite, x: number, y: number, blink: number) => {
+  for (const site of mazeSitesNear(g.terrain.seed, x, y, MAZE_PIN)) {
     const mx = (wx: number) => Math.round(wx / v.scale - v.ox)
     const my = (wy: number) => Math.round(wy / v.scale - v.oy)
     const x0 = mx(site.x)
     const y0 = my(site.y)
     const x1 = mx(site.x + site.side)
     const y1 = my(site.y + site.side)
-    ctx.fillStyle = '#2f6a34'
-    ctx.fillRect(x0, y0, x1 - x0, 1)
-    ctx.fillRect(x0, y1, x1 - x0 + 1, 1)
-    ctx.fillRect(x0, y0, 1, y1 - y0)
-    ctx.fillRect(x1, y0, 1, y1 - y0 + 1)
-    const known = seenCells(site)
-    ctx.fillStyle = '#b8b09c'
-    for (let r = 0; r < site.maze.rows; r++) {
-      for (let c = 0; c < site.maze.cols; c++) {
-        if (!known[r * site.maze.cols + c]) continue
-        const a = mx(site.x + c * GRAND.cell)
-        const b = my(site.y + r * GRAND.cell)
-        ctx.fillRect(a, b, Math.max(1, mx(site.x + (c + 1) * GRAND.cell) - a), Math.max(1, my(site.y + (r + 1) * GRAND.cell) - b))
+    if (x1 > -2 && y1 > -2 && x0 < S + 2 && y0 < S + 2) {
+      ctx.fillStyle = '#245a2c'
+      ctx.fillRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+      // A checker of lighter leaves, so the block reads as hedge and not as water or a field.
+      ctx.fillStyle = '#2f7a38'
+      for (let py = Math.max(y0 + 1, 0); py < Math.min(y1, S); py++) for (let px = Math.max(x0 + 1 + (py & 1), 0); px < Math.min(x1, S); px += 2) ctx.fillRect(px, py, 1, 1)
+      ctx.fillStyle = '#7ee07a'
+      ctx.fillRect(x0, y0, x1 - x0 + 1, 1)
+      ctx.fillRect(x0, y1, x1 - x0 + 1, 1)
+      ctx.fillRect(x0, y0, 1, y1 - y0 + 1)
+      ctx.fillRect(x1, y0, 1, y1 - y0 + 1)
+      const known = seenCells(site)
+      ctx.fillStyle = '#d8d0b8'
+      for (let r = 0; r < site.maze.rows; r++) {
+        for (let c = 0; c < site.maze.cols; c++) {
+          if (!known[r * site.maze.cols + c]) continue
+          const a = mx(site.x + c * GRAND.cell)
+          const b = my(site.y + r * GRAND.cell)
+          ctx.fillRect(a, b, Math.max(1, mx(site.x + (c + 1) * GRAND.cell) - a), Math.max(1, my(site.y + (r + 1) * GRAND.cell) - b))
+        }
       }
     }
+    // The pin at its middle (on the rim when it is off the map); it blinks while nobody has been in yet.
+    if (blink === 0 || seenCells(site).some((k) => k !== 0)) marker(ctx, v, shape, sprite, site.x + site.side / 2, site.y + site.side / 2, true)
   }
 }
 
@@ -527,7 +541,7 @@ export const drawMinimap = (ctx: Ctx, g: Game, shape: MinimapShape, t: number) =
         if (f.landmark) marks.push(f)
       }
     }
-    drawMazeMemory(ctx, g, v, me.x, me.y)
+    drawMazes(ctx, g, v, shape, art.maze, me.x, me.y, blink)
     if (g.place.entrance) drawFeature(ctx, v, g.place.entrance.terrain, look)
     drawViewBox(ctx, v, g)
     for (const f of marks) {

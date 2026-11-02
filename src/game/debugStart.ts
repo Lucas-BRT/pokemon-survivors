@@ -97,6 +97,23 @@ export const parseDebug = (search: string): DebugStart | null => {
   }
 }
 
+/**
+ * Sets the team down at the first way in of the nearest big hedge maze (just outside it, or `inside` a step in). The search widens
+ * until it finds one, so there is always a maze to debug without walking the map. Returns whether one was found.
+ */
+export const goToMaze = (g: Game, inside = false) => {
+  for (let blocks = 6; blocks <= 48; blocks *= 2) {
+    const site = nearestMaze(g.terrain.seed, g.player.x, g.player.y, blocks)
+    const e = site?.entrances[0]
+    if (!site || !e) continue
+    const c = cellCenter(site, e.c, e.r)
+    const out = inside ? -64 : 70
+    placeTeam(g, e.side === 3 ? site.x - out : e.side === 1 ? site.x + site.side + out : c.x, e.side === 0 ? site.y - out : e.side === 2 ? site.y + site.side + out : c.y)
+    return true
+  }
+  return false
+}
+
 /** Stages the running game as `spec` says. */
 export const applyDebug = (g: Game, input: DebugStart) => {
   let spec = input
@@ -104,15 +121,7 @@ export const applyDebug = (g: Game, input: DebugStart) => {
   if (spec.lab) spec = { ...spec, floor: Math.max(1, spec.floor) }
   g.coins += spec.coins
   // `?debug=maze`: just outside the nearest big hedge maze's first way in.
-  if (spec.maze) {
-    const site = nearestMaze(g.terrain.seed, g.player.x, g.player.y)
-    const e = site?.entrances[0]
-    if (site && e) {
-      const c = cellCenter(site, e.c, e.r)
-      const out = spec.inside ? -64 : 70
-      placeTeam(g, e.side === 3 ? site.x - out : e.side === 1 ? site.x + site.side + out : c.x, e.side === 0 ? site.y - out : e.side === 2 ? site.y + site.side + out : c.y)
-    }
-  }
+  if (spec.maze) goToMaze(g, spec.inside)
   g.player.gems += spec.gems
   if (spec.place) enterPlace(g, spec.place, Math.round(g.player.x), Math.round(g.player.y))
   // The lab's floor replaces the next one drawn: B2F with a room of the asked size.

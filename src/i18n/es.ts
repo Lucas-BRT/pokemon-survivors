@@ -2329,6 +2329,7 @@ export const es: Messages = {
       thief: '¡Un ladrón vino por la llave!',
       heart: '¡Abriste el cofre del corazón del laberinto!',
       trap: '¡Una trampa!',
+      enter: '¡Entraste al *Laberinto de Setos*! La horda no pasa del seto.',
     },
   },
   places: {

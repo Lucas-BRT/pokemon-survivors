@@ -2325,6 +2325,7 @@ export const zh: Messages = {
       thief: '小偷來搶鑰匙了！',
       heart: '你打開了迷宮中心的寶箱！',
       trap: '陷阱！',
+      enter: '你進入了*樹籬迷宮*！敵群無法越過樹籬。',
     },
   },
   places: {

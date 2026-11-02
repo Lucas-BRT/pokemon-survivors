@@ -2325,6 +2325,7 @@ export const fr: Messages = {
       thief: 'Un voleur est venu chercher la clé !',
       heart: 'Tu as ouvert le coffre au cœur du labyrinthe !',
       trap: 'Un piège !',
+      enter: 'Tu es entré dans le *Labyrinthe de haies* ! La horde ne passe pas la haie.',
     },
   },
   places: {

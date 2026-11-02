@@ -2327,6 +2327,7 @@ export const en: Messages = {
       thief: 'A thief came after the key!',
       heart: 'You opened the chest at the heart of the maze!',
       trap: 'A trap!',
+      enter: 'You entered the *Hedge Maze*! The horde cannot follow past the hedge.',
     },
   },
   places: {

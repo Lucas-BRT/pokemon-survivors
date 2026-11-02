@@ -2637,6 +2637,7 @@ export const pt = {
       thief: 'Um ladrão veio atrás da chave!',
       heart: 'Você abriu o baú do coração do labirinto!',
       trap: 'Uma armadilha!',
+      enter: 'Você entrou no *Labirinto de Sebes*! A horda não passa da sebe.',
     },
   },
   places: {

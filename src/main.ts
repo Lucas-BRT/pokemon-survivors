@@ -86,7 +86,7 @@ import { legendDevTools } from './game/legendDev'
 import { bankCapture, captureDevTools, showCapture } from './ui/capture'
 import { riftDevTools } from './game/riftDev'
 import { placeDevTools } from './game/placeDev'
-import { applyDebug, parseDebug } from './game/debugStart'
+import { applyDebug, goToMaze, parseDebug } from './game/debugStart'
 import { placeFeedback } from './ui/places'
 import { landmarkFeedback, mazeFeedback } from './ui/landmarks'
 import { PLACES } from './data/places'
@@ -1970,6 +1970,8 @@ const handleEvent = (r: Run, e: GameEvent) => {
     case 'landmark':
       return landmarkFeedback(ui, e.landmark, e.moment)
     case 'maze':
+      // Entering is told to whoever crossed the hedge, not to their teammates.
+      if (e.moment === 'enter' && run && e.n !== localPlayer(run.game).slot) return
       return mazeFeedback(ui, e.moment, e.n, e.of)
     case 'revive':
       playSfx('evolve')
@@ -4354,7 +4356,9 @@ if (import.meta.env.DEV) {
       card: (partner: PlayableId = loadSave().partner) => (endRun(), setScreen(sharePreview(ui, input, trainerShare(partner), () => showTitle()))),
       biome: (id: BiomeId) => withRun((g) => setBiome(g, id)),
       terrain: (kind?: SolidKind | 'lake', dy?: number) => (run ? devTerrain(run.game, kind, dy) : console.warn('ps: start a run first')),
-      /** `ps.landmark('maze')` walks you to the nearest maze (`cottage`, `tunnel`, `ruins`, `camp`; any without an argument), 60 px south of it. */
+      /** `ps.maze()` sets the team down outside the nearest big hedge maze's first way in (`ps.maze(true)` a step inside), whatever the distance. */
+      maze: (inside = false) => withRun((g) => void (goToMaze(g, inside) || console.warn('ps: no maze found'))),
+      /** `ps.landmark('cottage')` walks you to the nearest landmark (`tunnel`, `ruins`, `camp`; any without an argument), 60 px south of it. */
       landmark: (id?: LandmarkId, dy?: number) => (run ? devLandmark(run.game, id, dy) : console.warn('ps: start a run first')),
       weather: (id: WeatherId) => withRun((g) => setWeather(g, id)),
       /** `ps.ball(3)` drops Poké Balls 20 px to the right of the player (inside the magnet), side by side. */

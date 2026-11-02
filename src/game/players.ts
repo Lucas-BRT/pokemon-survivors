@@ -91,13 +91,14 @@ export const nearestPlayer = (g: Game, x: number, y: number): Player => {
  * Phantom Force) nor under a tunnel's ridge. When nobody in play can be seen,
  * the nearest in play (`nearestPlayer`): the foe loses track of them. Solo, the player.
  */
-export const nearestSeen = (g: Game, x: number, y: number): Player => {
+export const nearestSeen = (g: Game, x: number, y: number, maze = true): Player => {
   const { players } = g
   if (players.length === 1) return players[0]!
   let best: Player | null = null
   let bestD = Infinity
+  // `maze` false: the horde, which has no way into a hedge maze, looks for someone outside one first.
   for (const p of players) {
-    if (!inPlay(p) || p.hidden || p.landmark.transit !== null) continue
+    if (!inPlay(p) || p.hidden || p.landmark.transit !== null || (!maze && p.landmark.maze >= 0)) continue
     const d = dm.sq(p.x - x) + dm.sq(p.y - y)
     if (d < bestD) {
       bestD = d
@@ -142,15 +143,29 @@ export const mostHurt = (g: Game): Player => {
 export const anchorPlayer = (g: Game, turn = g.nextId): Player => {
   const { players } = g
   if (players.length === 1) return players[0]!
+  // The horde stays out of the hedge mazes: with anyone outside, the ones inside don't take a turn.
+  const skip = players.some((p) => inPlay(p) && p.landmark.maze < 0)
+  const takes = (p: Player) => inPlay(p) && (!skip || p.landmark.maze < 0)
   let standing = 0
-  for (const p of players) if (inPlay(p)) standing++
+  for (const p of players) if (takes(p)) standing++
   if (standing === 0) return players[0]!
   let n = ((turn % standing) + standing) % standing
   for (const p of players) {
-    if (!inPlay(p)) continue
+    if (!takes(p)) continue
     if (n-- === 0) return p
   }
   return players[0]!
+}
+
+/** Whether every player in play is inside a big hedge maze: the regular horde stops spawning (nobody outside to chase, and it would only pile at the hedge). */
+export const hordeShut = (g: Game) => {
+  let any = false
+  for (const p of g.players) {
+    if (!inPlay(p)) continue
+    if (p.landmark.maze < 0) return false
+    any = true
+  }
+  return any
 }
 
 /** Px between teammates set down together (a rift, a place, a domain's arena). */
