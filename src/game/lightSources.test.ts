@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { LIGHT_FIELD } from '../data/lightSources'
 import { CAVE } from '../data/places'
 import { createRng } from '../engine/rng'
-import { generateFloorV2, spaceAt, type DungeonFloor } from './dungeon'
-import { atDepth, attenuation, distToSpace, playersDistance, seenLevels, spaceEnergies, spaceLevels, type LightSource } from './lightSources'
+import { DUNGEON, generateFloorV2, spaceAt, type DungeonFloor } from './dungeon'
+import { atDepth, attenuation, distToSpace, playersDistance, seenLevels, spaceArea, spaceEnergies, spaceLevels, spaceRects, subtractRect, type LightSource } from './lightSources'
 
 const n = { ...CAVE.lit, ...LIGHT_FIELD }
 
@@ -149,5 +149,53 @@ describe('the deeper the floor, the darker a room that nobody lit', () => {
     const levels = spaceLevels(plan, [], atDepth(n, 3))
     const seen = seenLevels(plan, levels, (s) => s === plan.startRoom, [middle(plan, plan.startRoom)], atDepth(n, 3))
     expect(seen.level[plan.startRoom]).toBeCloseTo(atDepth(n, 3).floor)
+  })
+})
+
+describe('the floor of a corridor', () => {
+  const inter = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+    Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
+
+  it('takes a rectangle out of another into pieces that do not overlap it and add up to what is left', () => {
+    const r = { x: 0, y: 0, w: 100, h: 50 }
+    const q = { x: 30, y: 10, w: 40, h: 20 }
+    const pieces = subtractRect(r, q)
+    expect(pieces.reduce((a, p) => a + p.w * p.h, 0)).toBe(100 * 50 - 40 * 20)
+    for (const p of pieces) expect(inter(p, q)).toBe(0)
+    expect(subtractRect(r, { x: 200, y: 0, w: 5, h: 5 })).toEqual([r])
+  })
+
+  it('is only what lies between the rooms: never inside one, no thicker than the corridor, nothing of the corridor lost', () => {
+    let raw = 0
+    let clipped = 0
+    for (let seed = 1; seed <= 12; seed++) {
+      for (const index of [0, 1, 2]) {
+        const plan = generateFloorV2(createRng(seed), index)
+        plan.links.forEach((link, l) => {
+          const pieces = spaceRects(plan, plan.rooms.length + l)
+          // Never inside a room, and no more than one corridor thick.
+          for (const p of pieces) {
+            for (const room of plan.rooms) expect(inter(p, room)).toBeLessThan(1e-6)
+            expect(Math.min(p.w, p.h)).toBeLessThanOrEqual(DUNGEON.corridor + 1e-6)
+          }
+          // Everything of the corridor that was outside the rooms is still there (sampled on the raw stretches).
+          for (const r of link.rects) {
+            for (let i = 0; i <= 8; i++) {
+              for (let j = 0; j <= 8; j++) {
+                const x = r.x + (r.w * (i + 0.5)) / 9
+                const y = r.y + (r.h * (j + 0.5)) / 9
+                if (plan.rooms.some((room) => x >= room.x && x <= room.x + room.w && y >= room.y && y <= room.y + room.h)) continue
+                expect(pieces.some((p) => x >= p.x - 1e-6 && x <= p.x + p.w + 1e-6 && y >= p.y - 1e-6 && y <= p.y + p.h + 1e-6)).toBe(true)
+              }
+            }
+          }
+          raw += link.rects.reduce((a, r) => a + r.w * r.h, 0)
+          clipped += spaceArea(plan, plan.rooms.length + l)
+        })
+      }
+    }
+    // The raw stretches claimed far more than the corridors are.
+    expect(clipped).toBeLessThan(raw * 0.8)
+    expect(clipped).toBeGreaterThan(0)
   })
 })

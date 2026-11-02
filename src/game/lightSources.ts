@@ -55,8 +55,43 @@ export const attenuation = (distance: number, n: RemoteNumbers) =>
 /** How many spaces the floor has: its rooms, then its corridors. */
 export const spaceCount = (plan: Pick<DungeonFloor, 'rooms' | 'links'>) => plan.rooms.length + plan.links.length
 
-/** The rectangles of a space: the room itself, or the stretches of the corridor. */
-export const spaceRects = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, s: number): readonly Rect[] => (s < plan.rooms.length ? [plan.rooms[s]!] : plan.links[s - plan.rooms.length]!.rects)
+/** What is left of rectangle `r` once `q` is taken out of it: up to four rectangles that don't overlap `q` (`r` itself when they don't touch). */
+export const subtractRect = (r: Rect, q: Rect): Rect[] => {
+  const x0 = Math.max(r.x, q.x)
+  const y0 = Math.max(r.y, q.y)
+  const x1 = Math.min(r.x + r.w, q.x + q.w)
+  const y1 = Math.min(r.y + r.h, q.y + q.h)
+  if (x0 >= x1 || y0 >= y1) return [r]
+  const out: Rect[] = []
+  if (y0 > r.y) out.push({ x: r.x, y: r.y, w: r.w, h: y0 - r.y })
+  if (y1 < r.y + r.h) out.push({ x: r.x, y: y1, w: r.w, h: r.y + r.h - y1 })
+  if (x0 > r.x) out.push({ x: r.x, y: y0, w: x0 - r.x, h: y1 - y0 })
+  if (x1 < r.x + r.w) out.push({ x: x1, y: y0, w: r.x + r.w - x1, h: y1 - y0 })
+  return out
+}
+
+const corridorCache = new WeakMap<DungeonFloor['links'], Rect[][]>()
+
+/**
+ * The floor a corridor really is: its stretches (`Link.rects`, each a segment of the corridor's path widened by the corridor's width, and
+ * running half that past both ends so the bends join) *minus the rooms*. The path starts and ends at a point inside each room, so the raw
+ * stretches run well into the rooms (a big room's middle is far from its wall); counted whole, a corridor would claim part of every room
+ * it opens into: a tint, an area and a distance that are not the corridor's. Clipped to what lies between the rooms, each piece is at
+ * most one corridor wide (`DUNGEON.corridor`) and as long as the gap it crosses plus the bend's overlap.
+ */
+const corridorFloor = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, l: number): readonly Rect[] => {
+  let known = corridorCache.get(plan.links)
+  if (!known) corridorCache.set(plan.links, (known = []))
+  let rects = known[l]
+  if (!rects) {
+    rects = plan.links[l]!.rects.flatMap((raw) => plan.rooms.reduce<Rect[]>((pieces, room) => pieces.flatMap((p) => subtractRect(p, room)), [raw])).filter((r) => r.w > 0.5 && r.h > 0.5)
+    known[l] = rects
+  }
+  return rects
+}
+
+/** The rectangles of a space: the room itself, or the floor of the corridor between the rooms (`corridorFloor`). */
+export const spaceRects = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, s: number): readonly Rect[] => (s < plan.rooms.length ? [plan.rooms[s]!] : corridorFloor(plan, s - plan.rooms.length))
 
 /** The floor area of a space, px². */
 export const spaceArea = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, s: number) => spaceRects(plan, s).reduce((a, r) => a + r.w * r.h, 0)

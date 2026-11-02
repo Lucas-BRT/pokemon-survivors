@@ -399,6 +399,15 @@ const LIGHT_WARM = [255, 236, 160] as const
  * dark draws, `shownLevels`): nearly black when nobody lit it (the deeper the floor the darker it starts), warm as its light sources
  * come on, and a dot on each source (bright when on, dim when off) in the spaces already seen.
  */
+/** Fills a floor rectangle (room px) on the map by its corners, so neighbors never grow by rounding each one's size on its own. */
+const fillMapRect = (ctx: Ctx, v: View, inside: PlaceInteriorOf<'cave'>, r: { x: number; y: number; w: number; h: number }) => {
+  const x0 = Math.round((inside.x + r.x) / v.scale - v.ox)
+  const y0 = Math.round((inside.y + r.y) / v.scale - v.oy)
+  const x1 = Math.round((inside.x + r.x + r.w) / v.scale - v.ox)
+  const y1 = Math.round((inside.y + r.y + r.h) / v.scale - v.oy)
+  ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0))
+}
+
 const drawCaveLight = (ctx: Ctx, v: View, inside: PlaceInteriorOf<'cave'>) => {
   const plan = inside.state.plan
   const shown = plan ? shownLevels(plan) : undefined
@@ -411,10 +420,10 @@ const drawCaveLight = (ctx: Ctx, v: View, inside: PlaceInteriorOf<'cave'>) => {
     const dim = 1 - Math.min(1, level / lit.max)
     // Unlit: a dark veil, deeper where the floor starts darker; lit: the warm light over it.
     ctx.fillStyle = `rgba(${LIGHT_DARK[0]},${LIGHT_DARK[1]},${LIGHT_DARK[2]},${(0.55 * dim).toFixed(3)})`
-    for (const r of spaceRects(plan, space)) ctx.fillRect(Math.round((inside.x + r.x) / v.scale - v.ox), Math.round((inside.y + r.y) / v.scale - v.oy), Math.max(1, Math.round(r.w / v.scale)), Math.max(1, Math.round(r.h / v.scale)))
+    for (const r of spaceRects(plan, space)) fillMapRect(ctx, v, inside, r)
     if (k > 0.02) {
       ctx.fillStyle = `rgba(${LIGHT_WARM[0]},${LIGHT_WARM[1]},${LIGHT_WARM[2]},${(0.5 * k).toFixed(3)})`
-      for (const r of spaceRects(plan, space)) ctx.fillRect(Math.round((inside.x + r.x) / v.scale - v.ox), Math.round((inside.y + r.y) / v.scale - v.oy), Math.max(1, Math.round(r.w / v.scale)), Math.max(1, Math.round(r.h / v.scale)))
+      for (const r of spaceRects(plan, space)) fillMapRect(ctx, v, inside, r)
     }
   })
   for (const k of inside.state.sources) {
