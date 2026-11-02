@@ -31,7 +31,7 @@ import {
   applyOffer, branchOffers, draftOffers, loadout, nothingToChoose, offerSubject, pendingEvolution, recomputeStats, rollOffers, shinyOfferOdds, xpFor,
   type RollOptions,
 } from './leveling'
-import { createMapEvents, updateMapEvents } from './mapEvents'
+import { createMapEvents, spawnMapEvent, updateMapEvents } from './mapEvents'
 import { createCurseState } from './curses'
 import { curseCast, decideCurse, updateCurses } from './curseSystem'
 import { updateDuos } from './duoMoves'
@@ -54,6 +54,7 @@ import { updateProps } from './props'
 import { withHoney, withOutbreak } from './outbreak'
 import { withHaunts } from './halloween'
 import { createTerrain, groundAt, playerWaterPace, updateTerrain } from './terrain'
+import { createMazeState, updateMazes } from './mazeRun'
 import { createLandmarkState, createPlayerLandmarks, updateLandmarks, updateTunnel } from './landmarks'
 import { drawRoster, type Roster } from './roster'
 import { clockRuns, createRiftState } from './rift'
@@ -278,6 +279,7 @@ export const createRun = (view: Game['view'], seed: number, setups: readonly Pla
     rift: createRiftState(),
     place: createPlaceState(),
     landmarks: createLandmarkState(),
+    mazes: createMazeState(),
     tutors: 0,
     endless: null,
     tally: createTally(),
@@ -952,6 +954,7 @@ export const stepTeam = (g: Game, inputs: readonly StepInput[], dt: number) => {
   updatePlaceEntrance(g, dt)
   updatePlace(g, dt)
   eachPlayer(g, updateLandmarks, dt)
+  updateMazes(g, dt, spawnMapEvent)
   updateEndless(g)
   rebuildGrid(g)
   updateTraits(g, dt)

@@ -111,6 +111,7 @@ export const siteEn: SiteMessages = {
     riftShinyNote: (odds: number) => `Can show up shiny in 1 of ${n(odds)} rifts: it pays double ₽ plus another Poké Ball.`,
     summoned: (by: string) => `Called in by ${by}`,
     retinue: (by: string) => `In ${by}'s domain, behind a legendary rift`,
+    maze: (role: 'hide' | 'guard' | 'thief') => (role === 'guard' ? 'Guards the hedge maze’s chest' : role === 'thief' ? 'Steals the hedge maze’s keys' : 'Hides in the hedge maze’s hedges'),
     behavior: 'Behavior',
     legendMode: 'Legend Mode',
     capture: (need: number) => (need === 1 ? 'Beat it once as a boss, in any mode, and it becomes playable in Legend Mode (its own ranking, a tougher horde, awakenings at Lv 12 and 28).' : `Beat it ${need} times as a boss, in any mode, and it becomes playable in Legend Mode (its own ranking, a tougher horde, awakenings at Lv 12 and 28).`),

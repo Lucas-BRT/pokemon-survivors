@@ -1,3 +1,5 @@
+import { BIOMES, type BiomeId } from '../data/biomes'
+import { setBiome } from './biomes'
 import { PLACE_IDS, type PlaceId } from '../data/places'
 import { CAVE_NPCS, type CaveNpcId } from '../data/caveShop'
 import { descendCave, stagePlan } from './cave'
@@ -13,10 +15,10 @@ import type { Game } from './types'
  * `?debug=cave` starts inside the cave; `&floor=2` takes its stairs that many
  * times, `&mon=charmander` picks the Pokémon, `&coins=5000` and `&gems=6` fill the run's ₽ and gems, and
  * `&shop=sableyeShiny` (a `CAVE_NPCS` id) puts that dweller in the floor's Cristalário and the team beside it.
- * A bare `?debug` just starts a run. Never ranked:
+ * `?debug=maze` walks the run to the nearest hedge maze (`&biome=snow` first sets its biome). A bare `?debug` just starts a run. Never ranked:
  * the shell skips the debug runs' banking, and this only runs in dev.
  */
-export type DebugStart = { place: PlaceId | null; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null }
+export type DebugStart = { place: PlaceId | null; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; biome: BiomeId | null }
 
 /** The light lab (`&lab=S:C:D`): one room of S times the reference area, C crystals inside it, D in its door tile. */
 export type Lab = { size: number; inside: number; doors: number; vertical: 0 | 1 | 2 }
@@ -87,6 +89,8 @@ export const parseDebug = (search: string): DebugStart | null => {
     coins: num('coins'),
     gems: num('gems'),
     lab: parseLab(q.get('lab')),
+    maze: place === 'maze',
+    biome: (Object.keys(BIOMES) as BiomeId[]).find((id) => id === q.get('biome')) ?? null,
     shop: (Object.keys(CAVE_NPCS) as CaveNpcId[]).find((id) => id === q.get('shop')) ?? null,
   }
 }
@@ -94,6 +98,7 @@ export const parseDebug = (search: string): DebugStart | null => {
 /** Stages the running game as `spec` says. */
 export const applyDebug = (g: Game, input: DebugStart) => {
   let spec = input
+  if (spec.biome) setBiome(g, spec.biome)
   if (spec.lab) spec = { ...spec, floor: Math.max(1, spec.floor) }
   g.coins += spec.coins
   g.player.gems += spec.gems

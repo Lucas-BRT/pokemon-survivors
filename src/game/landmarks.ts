@@ -6,6 +6,7 @@ import { dropItem } from './consumables'
 import { burst } from './effects'
 import { COIN_VALUES } from './meta'
 import { awardEgg, dropCoins, dropPickup, dropXp } from './pickups'
+import { hintLocked, mazeLocked, wakeGuardian } from './mazeRun'
 import { roomOf } from './room'
 import { featuresNear, type Landmark } from './terrain'
 import type { Game, Player } from './types'
@@ -72,6 +73,8 @@ const openTreasure = (g: Game, lm: Landmark & { id: TreasureLandmark }, x: numbe
   if ('egg' in loot) awardEgg(g, 'chest', x, y)
   burst(g, x, y - 8, { colors: SPARKLE, count: 26, speed: 90, ttl: 0.6, gravity: 60 })
   notify(g, lm.id, 'loot')
+  // What guards the heart of a maze steps out the moment it is opened.
+  if (lm.id === 'maze') wakeGuardian(g, lm, x, y)
 }
 
 /** Whether the treasure at `cell` shows open: taken, or a co-op run's, which is scenery there (`COOP_LOCKS`) and must not promise a chest. Drawing only. */
@@ -98,6 +101,11 @@ export const updateLandmarks = (g: Game, dt: number) => {
     }
     const chest = lm.treasure
     if (chest && isTreasure(lm) && !w.looted.has(lm.cell) && dm.sq(chest.x - p.x) + dm.sq(chest.y - p.y) < near * near) {
+      // The maze's chest waits for its keys (`mazeRun.ts`).
+      if (lm.id === 'maze' && mazeLocked(g, lm.cell)) {
+        hintLocked(g, lm.cell)
+        continue
+      }
       opening = true
       if (s.opening?.cell === lm.cell) s.opening.t += dt
       else s.opening = { cell: lm.cell, t: dt }

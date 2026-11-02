@@ -38,7 +38,7 @@ import { isClone } from '../game/legend'
 import { drawArena, drawRiftArrow, drawRiftFallAir, drawRiftFallGround, drawRiftFallOut, drawRiftPortal, dropArenas, riftFallLook, warmArena } from './rift'
 import { drawEntranceAir, drawEntranceGround, drawPlaceArrow, drawPlaceDark, drawPlaceFallOut, drawPlaceFloor, drawPlaceGround, drawPlaceOver, drawWings, dropPlaceFloor, placeFallLook } from './places'
 import { roomOf } from '../game/room'
-import { drawLandmarkAir, drawTunnelDark, playerUnderground } from './landmarks'
+import { drawLandmarkAir, drawMazeDark, drawMazeRun, drawTunnelDark, playerUnderground } from './landmarks'
 import { drawPokemon, sprites, type AnimName, type SpeciesSprites } from './sprites'
 import { bodyOf } from '../data/bodies'
 import { drawDrainVines, drawTypeEvolvedAttack, drawTypeEvolvedGround } from './typeEvolved'
@@ -1128,6 +1128,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   }
   drawEntranceAir(ctx, g, t)
   drawLandmarkAir(ctx, g, t, visible)
+  drawMazeRun(ctx, g, t, visible)
   drawWings(ctx, g, t)
   drawPlaceOver(ctx, g, camX, camY)
   drawCrystalGlints(ctx, g)
@@ -1200,6 +1201,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   if (g.halloween && !g.rift.arena && !g.place.inside) drawHauntedNight(ctx, g, camX, camY, t)
   // The cave's dark and the graveyard's night, then the weather, over the world but under damage numbers.
   drawPlaceDark(ctx, g, camX, camY, t)
+  drawMazeDark(ctx, g, camX, camY)
   drawNightmareDark(ctx, g, camX, camY, t)
   drawTunnelDark(ctx, g, camX, camY)
   drawWeather(ctx, g, camX, camY, t, opts.fog)

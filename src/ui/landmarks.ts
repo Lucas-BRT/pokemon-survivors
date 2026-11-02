@@ -1,6 +1,7 @@
 import { playSfx } from '../engine/audio'
 import type { LandmarkId } from '../data/landmarks'
 import type { LandmarkMoment } from '../game/landmarks'
+import type { MazeMoment } from '../game/mazeRun'
 import { t } from '../i18n'
 import { pokeballIcon } from '../render/art'
 import { h, setText } from './dom'
@@ -31,6 +32,35 @@ const showSign = (root: HTMLElement, id: LandmarkId) => {
   sign.classList.add('hidden')
   void sign.offsetWidth
   sign.classList.remove('hidden')
+}
+
+/** The hedge maze's happenings (`game/mazeRun.ts`): a toast and a sound for each. */
+export const mazeFeedback = (root: HTMLElement, moment: MazeMoment, n: number, of: number) => {
+  const m = t().landmarks.maze
+  const say = (text: string, kind: 'minor' | 'important' = 'minor') => runToast(root, kind, text, 2600, 'maze')
+  switch (moment) {
+    case 'key':
+      playSfx('unlock')
+      return say(m.key(n, of))
+    case 'locked':
+      playSfx('denied')
+      return say(m.locked(n))
+    case 'cache':
+      playSfx('unlock')
+      return say(m.cache)
+    case 'decoy':
+      playSfx('explosion')
+      return say(m.decoy)
+    case 'ambush':
+      return playSfx('hit')
+    case 'guard':
+      playSfx('legendary')
+      return say(m.guard, 'important')
+    case 'ring':
+      return playSfx('whoosh')
+    case 'thief':
+      return say(m.thief)
+  }
 }
 
 export const landmarkFeedback = (root: HTMLElement, id: LandmarkId, moment: LandmarkMoment) => {

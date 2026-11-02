@@ -88,7 +88,7 @@ import { riftDevTools } from './game/riftDev'
 import { placeDevTools } from './game/placeDev'
 import { applyDebug, parseDebug } from './game/debugStart'
 import { placeFeedback } from './ui/places'
-import { landmarkFeedback } from './ui/landmarks'
+import { landmarkFeedback, mazeFeedback } from './ui/landmarks'
 import { PLACES } from './data/places'
 import { kitDevTools } from './game/kitDev'
 import { eggMoveDevTools } from './game/eggMovesDev'
@@ -1124,6 +1124,7 @@ const startDebugRun = async (spec: NonNullable<ReturnType<typeof parseDebug>>) =
   const id = Object.keys(PLAYABLE).find((k) => k === spec.mon) as PlayableId | undefined
   await startRun(id ?? loadSave().partner)
   if (run) applyDebug(run.game, spec)
+  if (run && spec.maze) devLandmark(run.game, 'maze')
 }
 
 /** Set while `startRun` loads a run. */
@@ -1969,6 +1970,8 @@ const handleEvent = (r: Run, e: GameEvent) => {
       return placeFeedback(ui, e.place, e.notice)
     case 'landmark':
       return landmarkFeedback(ui, e.landmark, e.moment)
+    case 'maze':
+      return mazeFeedback(ui, e.moment, e.n, e.of)
     case 'revive':
       playSfx('evolve')
       return news(h('span', { class: 'item-toast' }, h('img', { src: consumableIcon('revive'), alt: '' }), rich(t().toast.revive)), 3000)

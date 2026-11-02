@@ -2302,7 +2302,7 @@ export const fr: Messages = {
     hints: {
       cottage: 'Quelqu’un a laissé une caisse à l’intérieur…',
       tunnel: 'Entre par une bouche, ressors par l’autre.',
-      maze: 'Un coffre attend au cœur du labyrinthe.',
+      maze: 'Un coffre attend au cœur du labyrinthe. Quelque chose le garde.',
       ruins: 'L’autel attend en silence.',
       camp: 'Un sac à dos oublié près du feu.',
     },
@@ -2313,6 +2313,17 @@ export const fr: Messages = {
       camp: 'Tu as ouvert le sac à dos oublié !',
     },
     tunnelOut: 'Tu es ressorti de l’autre côté du tunnel !',
+    /** What happens in the hedge maze (`game/mazeRun.ts`). */
+    maze: {
+      key: (n: number, of: number) => `Clé ${n}/${of} !`,
+      locked: (left: number) => (left === 1 ? 'Le coffre est verrouillé : il manque *1 clé*.' : `Le coffre est verrouillé : il manque *${left} clés*.`),
+      cache: 'Un coffre caché dans une impasse !',
+      decoy: 'C’était un leurre !',
+      ambush: 'Quelque chose a bougé dans les haies !',
+      guard: 'Le gardien du labyrinthe s’est réveillé !',
+      ring: 'L’anneau t’a emporté de l’autre côté !',
+      thief: 'Un voleur est venu chercher la clé !',
+    },
   },
   places: {
     names: { cave: 'Grotte Sombre', graveyard: 'Cimetière Hanté', sky: 'Au-dessus des nuages' },

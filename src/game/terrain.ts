@@ -1,3 +1,5 @@
+import { MAZE_CAST } from '../data/mazeEvents'
+import { mazeBox } from './landmarkLayout'
 import { hash2, weightedPick } from '../engine/rng'
 import { abilityImmune } from './abilities'
 import { playerForm } from './branch'
@@ -402,7 +404,17 @@ export type Ground = 'land' | 'water' | 'ice' | 'lava'
 export const groundAt = (g: Game, x: number, y: number): Ground => {
   const room = roomOf(g)
   if (room) return arenaGround(room.layout, x - room.x, y - room.y)
-  for (const f of featuresNear(g, x, y, 0)) if (f.lake && inside(f.lake.foot, x, y, 0)) return g.biome.id === 'snow' ? 'ice' : 'water'
+  for (const f of featuresNear(g, x, y, 0)) {
+    if (f.lake && inside(f.lake.foot, x, y, 0)) return g.biome.id === 'snow' ? 'ice' : 'water'
+    // A hedge maze's floor follows its biome's rule: slippery in the snow, slow where webs and vines grow (`data/mazeEvents.ts`).
+    const lm = f.landmark
+    if (lm?.id === 'maze') {
+      const rule = MAZE_CAST[g.biome.id].rule
+      if (rule !== 'ice' && rule !== 'webs') continue
+      const box = mazeBox(lm.variant, lm.x, lm.y)
+      if (x > box.x && x < box.x + box.w && y > box.y && y < box.y + box.h) return rule === 'ice' ? 'ice' : 'water'
+    }
+  }
   return 'land'
 }
 

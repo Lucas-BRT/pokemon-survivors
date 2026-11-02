@@ -1,3 +1,4 @@
+import { MAZE_CAST, MAZE_RUN, type MazeKind } from '../data/mazeEvents'
 import manifest from '../data/sprites.generated.json'
 import { ENEMIES, type EnemyDef, type EnemyId } from '../data/enemies'
 import { BRANCHES, branchesOf, branchStage, type BranchId } from '../data/branches'
@@ -183,6 +184,8 @@ export type Appearance =
   | { kind: 'reaper'; at: number }
   /** Lives in a place (`data/places.ts`), coming out from `from`; `boss` for the place's own boss. */
   | { kind: 'place'; place: PlaceId; from: number; boss: boolean }
+  /** Lives in the overworld's hedge maze (`data/mazeEvents.ts`): hiding in the hedges, guarding the chest or stealing the keys. */
+  | { kind: 'maze'; role: 'hide' | 'guard' | 'thief' }
   /** Called in by a summoner (Nidoqueen's Nidoran). */
   | { kind: 'summoned'; by: EnemyId }
   /** Comes at the player in a legendary's domain (`by`'s rift): its crossing's retinue, adds it calls in or keepers of its barrier. */
@@ -235,7 +238,15 @@ export const appearances = (id: EnemyId): Appearance[] => {
   const retinue = (Object.keys(DOMAINS) as RiftLegend[])
     .filter((by) => domainCast(by).includes(id))
     .map((by): Appearance => ({ kind: 'retinue', by }))
-  return [...windows, ...events, ...rift, ...reaper, ...placed, ...summoned, ...retinue]
+  const mazes = (Object.values(MAZE_CAST) as readonly MazeKind[]).flatMap((k): Appearance[] => [
+    ...(k.hide.some((h) => h === id) ? [{ kind: 'maze' as const, role: 'hide' as const }] : []),
+    ...(k.guard.some((h) => h === id) ? [{ kind: 'maze' as const, role: 'guard' as const }] : []),
+  ])
+  const thief: Appearance[] = MAZE_RUN.thieves.includes(id) ? [{ kind: 'maze', role: 'thief' }] : []
+  const rare: Appearance[] = MAZE_RUN.rare.guard === id ? [{ kind: 'maze', role: 'guard' }] : []
+  // One line per role however many biomes share it.
+  const maze = [...mazes, ...thief, ...rare].filter((a, i, all) => all.findIndex((b) => b.kind === 'maze' && a.kind === 'maze' && b.role === a.role) === i)
+  return [...windows, ...events, ...rift, ...reaper, ...placed, ...maze, ...summoned, ...retinue]
 }
 
 /** Everyone a legendary's domain brings besides its legendaries: the crossing's retinue, its adds and its barrier's keepers. */

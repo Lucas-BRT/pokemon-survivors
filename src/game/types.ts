@@ -1,3 +1,4 @@
+import type { MazeMoment, MazeRun } from './mazeRun'
 import type { WareId } from '../data/caveShop'
 import type { Dir8 } from '../engine/math'
 import type { SeededRng } from '../engine/rng'
@@ -743,6 +744,8 @@ export type GameEvent =
   | { kind: 'egg'; tier: EggTier }
   /** A landmark was named, its treasure opened, or the player went into or out of a tunnel (`landmarks.ts`). */
   | { kind: 'landmark'; landmark: LandmarkId; moment: LandmarkMoment }
+  /** Something happened in a hedge maze: a key found (`n` of `of`), a chest that bit, a guardian woken… */
+  | { kind: 'maze'; moment: MazeMoment; n: number; of: number }
   /** Something happened at a place: its entrance, the way in and out, what goes on inside (`place.ts`). */
   | { kind: 'place'; place: PlaceId; notice: PlaceNotice }
   /** A foe shattered: an execute, or a frozen foe's ice broken by a hit. */
@@ -874,6 +877,8 @@ export type Game = {
   terrain: TerrainState
   /** The landmarks' treasures taken, names shown and the tunnel being walked (`game/landmarks.ts`). */
   landmarks: LandmarkState
+  /** The hedge mazes met this run, by landmark cell (`game/mazeRun.ts`). */
+  mazes: Map<number, MazeRun>
   /** Points of interest placed by the event director (`mapEvents.ts`). */
   mapEvents: MapEventsState
   /** Full-screen white flash strength (Explosion), decays to 0. */

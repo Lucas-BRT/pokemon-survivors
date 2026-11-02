@@ -114,6 +114,7 @@ export const siteZh: SiteMessages = {
     riftShinyNote: (odds: number) => `每 ${n(odds)} 次裂縫中有 1 次會是異色：獲得雙倍 ₽，外加一顆 Poké Ball。`,
     summoned: (by: string) => `由 ${by} 召喚`,
     retinue: (by: string) => `在 ${by} 的領域中，位於傳說裂縫後方`,
+    maze: (role: 'hide' | 'guard' | 'thief') => (role === 'guard' ? '守護樹籬迷宮的寶箱' : role === 'thief' ? '偷走樹籬迷宮的鑰匙' : '藏在樹籬迷宮的樹籬裡'),
     behavior: '行為',
     legendMode: '傳說模式',
     capture: (need: number) =>

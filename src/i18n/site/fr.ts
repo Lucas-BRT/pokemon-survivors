@@ -112,6 +112,7 @@ export const siteFr: SiteMessages = {
     riftShinyNote: (odds: number) => `Peut apparaître en chromatique dans 1 faille sur ${n(odds)} : il rapporte le double de ₽ et une Poké Ball de plus.`,
     summoned: (by: string) => `Appelé en renfort par ${by}`,
     retinue: (by: string) => `Dans le domaine de ${by}, derrière une faille légendaire`,
+    maze: (role: 'hide' | 'guard' | 'thief') => (role === 'guard' ? 'Garde le coffre du labyrinthe de haies' : role === 'thief' ? 'Vole les clés du labyrinthe de haies' : 'Se cache dans les haies du labyrinthe'),
     behavior: 'Comportement',
     legendMode: 'Mode Légendaire',
     capture: (need: number) => (need === 1 ? 'Bats-le une fois en tant que boss, dans n’importe quel mode, et il devient jouable en Mode Légendaire (son propre classement, une horde plus coriace, des éveils au Nv 12 et 28).' : `Bats-le ${need} fois en tant que boss, dans n’importe quel mode, et il devient jouable en Mode Légendaire (son propre classement, une horde plus coriace, des éveils au Nv 12 et 28).`),

@@ -111,6 +111,7 @@ export const siteEs: SiteMessages = {
     riftShinyNote: (odds: number) => `Puede aparecer shiny en 1 de cada ${n(odds)} grietas: paga el doble de ₽ y una Poké Ball más.`,
     summoned: (by: string) => `Invocado por ${by}`,
     retinue: (by: string) => `En el dominio de ${by}, tras una grieta legendaria`,
+    maze: (role: 'hide' | 'guard' | 'thief') => (role === 'guard' ? 'Guarda el cofre del laberinto de setos' : role === 'thief' ? 'Roba las llaves del laberinto de setos' : 'Se esconde en los setos del laberinto'),
     behavior: 'Comportamiento',
     legendMode: 'Modo Legendario',
     capture: (need: number) => (need === 1 ? 'Véncelo 1 vez como jefe, en cualquier modo, y se vuelve jugable en el Modo Legendario (ranking propio, horda más dura, despertares en el Nv 12 y 28).' : `Véncelo ${need} veces como jefe, en cualquier modo, y se vuelve jugable en el Modo Legendario (ranking propio, horda más dura, despertares en el Nv 12 y 28).`),

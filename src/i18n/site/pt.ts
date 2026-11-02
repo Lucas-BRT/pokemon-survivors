@@ -148,6 +148,7 @@ export const sitePt = {
     riftShinyNote: (odds: number) => `Pode aparecer shiny em 1 de ${n(odds)} fendas: paga o dobro de ₽ e mais uma Poké Ball.`,
     summoned: (by: string) => `Chamado por ${by}`,
     retinue: (by: string) => `No domínio de ${by}, atrás de uma fenda lendária`,
+    maze: (role: 'hide' | 'guard' | 'thief'): string => (role === 'guard' ? 'Guarda o baú do labirinto de sebes' : role === 'thief' ? 'Rouba as chaves do labirinto de sebes' : 'Esconde-se nas sebes do labirinto'),
     behavior: 'Comportamento',
     /** A legendary's card: how to capture it for the Legend mode (`game/capture.ts`). */
     legendMode: 'Modo Lendário',

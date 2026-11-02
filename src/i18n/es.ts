@@ -2306,7 +2306,7 @@ export const es: Messages = {
     hints: {
       cottage: 'Alguien dejó una caja adentro…',
       tunnel: 'Entra por una boca y sal por la otra.',
-      maze: 'Hay un cofre en el corazón del laberinto.',
+      maze: 'Hay un cofre en el corazón del laberinto. Algo lo guarda.',
       ruins: 'El altar espera en silencio.',
       camp: 'Una mochila olvidada junto a la fogata.',
     },
@@ -2317,6 +2317,17 @@ export const es: Messages = {
       camp: '¡Abriste la mochila olvidada!',
     },
     tunnelOut: '¡Saliste del otro lado del túnel!',
+    /** What happens in the hedge maze (`game/mazeRun.ts`). */
+    maze: {
+      key: (n: number, of: number) => `¡Llave ${n}/${of}!`,
+      locked: (left: number) => (left === 1 ? 'El cofre está cerrado: falta *1 llave*.' : `El cofre está cerrado: faltan *${left} llaves*.`),
+      cache: '¡Un cofre escondido en un callejón!',
+      decoy: '¡Era un señuelo!',
+      ambush: '¡Algo se movió entre los setos!',
+      guard: '¡El guardián del laberinto despertó!',
+      ring: '¡El anillo te llevó al otro lado!',
+      thief: '¡Un ladrón vino por la llave!',
+    },
   },
   places: {
     names: { cave: 'Cueva Oscura', graveyard: 'Cementerio Embrujado', sky: 'Sobre las Nubes' },

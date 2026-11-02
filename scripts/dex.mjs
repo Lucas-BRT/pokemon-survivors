@@ -63,7 +63,15 @@ export const COMPANIONS = [710]
 export const HALLOWEEN_BOSSES = [778, 354, 302, 426, 429, 229, 94, 609, 711, 709, 430, 477]
 /** The lobby's shopkeepers (render/plaza.ts): Kecleon, and its purple brother recolored from the same sheets. */
 export const SHOPKEEPERS = [352]
-export const DEX = [...new Set([...STARTERS, ...HATCHLINGS, ...HORDE, ...TRAITS, ...BOSSES, ...CRITTERS, ...RIFT_LEGENDS, ...EVENT_LEGENDS, ...CAMEOS, ...FESTIVAL_LEGENDS, ...REAPER, ...PLACE_BOSSES, ...COMPANIONS, ...HALLOWEEN_BOSSES, ...SHOPKEEPERS])]
+/**
+ * The hedge maze's dwellers (src/data/mazeEvents.ts): the Pokémon that hide in its hedges, the guardians of its chest and the
+ * thieves around its keys. They never join the wild horde and never roll shiny.
+ */
+export const MAZE_DWELLERS = [
+  590, 455, 597, 946, 556, 595, 596, 557, 453, 509, 624, 582, 615, 562, 971, 568, // hide in the hedges: Foongus, Carnivine, Ferroseed, Bramblin, Maractus, Joltik, Galvantula, Dwebble, Croagunk, Purrloin, Pawniard, Vanillite, Cryogonal, Yamask, Greavard, Trubbish
+  465, 623, 563, 614, 537, 640, 625, 713, // guard the chest: Tangrowth, Golurk, Cofagrigus, Beartic, Seismitoad, Virizion, Bisharp, Avalugg
+]
+export const DEX = [...new Set([...STARTERS, ...HATCHLINGS, ...HORDE, ...TRAITS, ...BOSSES, ...CRITTERS, ...RIFT_LEGENDS, ...EVENT_LEGENDS, ...CAMEOS, ...FESTIVAL_LEGENDS, ...REAPER, ...PLACE_BOSSES, ...COMPANIONS, ...HALLOWEEN_BOSSES, ...SHOPKEEPERS, ...MAZE_DWELLERS])]
 /**
  * Flying types that take to the sky (the sky's flock in src/data/places.ts and the
  * Flying-type player forms): they get a `Fly` sheet when SpriteCollab has one.

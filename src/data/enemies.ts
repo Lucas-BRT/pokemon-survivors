@@ -1,4 +1,4 @@
-import { ROSTER, type Tier } from './roster'
+import { deriveEnemy, ROSTER, type BaseStats, type Tier } from './roster'
 import type { TraitId } from './traits'
 import type { PokeType } from './types'
 
@@ -47,6 +47,13 @@ const NIGHT_SLOTS = [
 
 /** Stats of the rare mythical that may join Mewtwo at the end. */
 const MYTHICAL = { hp: 9000, speed: 70, damage: 30, xp: 300, mass: 40, boss: true, legendary: true } as const
+
+/** A hedge maze's dweller (`data/mazeEvents.ts`): stats derived from its base stats like the horde's, but never drawn into the horde (no tier). */
+const dweller = (dex: number, name: string, types: EnemyDef['types'], [hp, attack, defense, spAttack, spDefense, speed]: readonly [number, number, number, number, number, number]): EnemyDef => {
+  const stats: BaseStats = { hp, attack, defense, spAttack, spDefense, speed }
+  const { tier: _tier, ...def } = deriveEnemy({ dex, name, types, stats })
+  return def
+}
 
 /**
  * Every enemy: the generated wild roster (`data/roster.ts`) plus the hand-tuned
@@ -118,6 +125,31 @@ export const ENEMIES = {
   trevenantBoss: { dex: 709, name: 'Trevenant', types: ['ghost', 'grass'], speed: 28, ...NIGHT_SLOTS[1] },
   honchkrowBoss: { dex: 430, name: 'Honchkrow', types: ['dark', 'flying'], speed: 38, ...NIGHT_SLOTS[1] },
   dusknoirBoss: { dex: 477, name: 'Dusknoir', types: ['ghost'], speed: 30, ...NIGHT_SLOTS[1] },
+  // The hedge maze's dwellers (`data/mazeEvents.ts`): the ones that hide in its hedges, the thieves around its keys and the guardians of its chest.
+  foongus: dweller(590, 'Foongus', ['grass', 'poison'], [69, 55, 45, 55, 55, 15]),
+  carnivine: dweller(455, 'Carnivine', ['grass'], [74, 100, 72, 90, 72, 46]),
+  ferroseed: dweller(597, 'Ferroseed', ['grass', 'steel'], [44, 50, 91, 24, 86, 10]),
+  bramblin: dweller(946, 'Bramblin', ['grass', 'ghost'], [40, 65, 30, 45, 35, 60]),
+  maractus: dweller(556, 'Maractus', ['grass'], [75, 86, 67, 106, 67, 60]),
+  joltik: dweller(595, 'Joltik', ['bug', 'electric'], [50, 47, 50, 57, 50, 65]),
+  galvantula: dweller(596, 'Galvantula', ['bug', 'electric'], [70, 77, 60, 97, 60, 108]),
+  dwebble: dweller(557, 'Dwebble', ['bug', 'rock'], [50, 65, 85, 35, 35, 55]),
+  croagunk: dweller(453, 'Croagunk', ['poison', 'fighting'], [48, 61, 40, 61, 40, 50]),
+  purrloin: dweller(509, 'Purrloin', ['dark'], [41, 50, 37, 50, 37, 66]),
+  pawniard: dweller(624, 'Pawniard', ['dark', 'steel'], [45, 85, 70, 40, 40, 60]),
+  vanillite: dweller(582, 'Vanillite', ['ice'], [36, 50, 50, 65, 60, 44]),
+  cryogonal: dweller(615, 'Cryogonal', ['ice'], [80, 50, 50, 95, 135, 105]),
+  yamask: dweller(562, 'Yamask', ['ghost'], [38, 30, 85, 55, 65, 30]),
+  greavard: dweller(971, 'Greavard', ['ghost'], [50, 61, 60, 30, 55, 34]),
+  trubbish: dweller(568, 'Trubbish', ['poison'], [50, 50, 62, 40, 62, 65]),
+  tangrowth: dweller(465, 'Tangrowth', ['grass'], [100, 100, 125, 110, 50, 50]),
+  golurk: dweller(623, 'Golurk', ['ground', 'ghost'], [89, 124, 80, 55, 80, 55]),
+  cofagrigus: dweller(563, 'Cofagrigus', ['ghost'], [58, 50, 145, 95, 105, 30]),
+  beartic: dweller(614, 'Beartic', ['ice'], [95, 130, 80, 70, 80, 50]),
+  seismitoad: dweller(537, 'Seismitoad', ['water', 'ground'], [105, 95, 75, 85, 75, 74]),
+  virizion: dweller(640, 'Virizion', ['grass', 'fighting'], [91, 90, 72, 90, 129, 108]),
+  bisharp: dweller(625, 'Bisharp', ['dark', 'steel'], [65, 125, 100, 60, 70, 70]),
+  avalugg: dweller(713, 'Avalugg', ['ice'], [95, 117, 184, 44, 46, 28]),
   // The endless mode's reaper (`game/endless.ts`): it hunts the player from 20:00.
   arceus: { dex: 493, name: 'Arceus', types: ['normal'], hp: 300000, speed: 60, damage: 90, xp: 0, mass: 999, boss: true, legendary: true, scale: 2 },
 } as const satisfies Record<string, EnemyDef>

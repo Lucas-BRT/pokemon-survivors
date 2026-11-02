@@ -2614,7 +2614,7 @@ export const pt = {
     hints: {
       cottage: 'Alguém deixou um caixote lá dentro…',
       tunnel: 'Entre por uma boca e saia pela outra.',
-      maze: 'Há um baú no coração do labirinto.',
+      maze: 'Há um baú no coração do labirinto. E algo o guarda.',
       ruins: 'O altar espera em silêncio.',
       camp: 'Uma mochila esquecida perto da fogueira.',
     } satisfies Record<LandmarkId, string>,
@@ -2625,6 +2625,17 @@ export const pt = {
       camp: 'Você abriu a mochila esquecida!',
     } satisfies Record<TreasureLandmark, string>,
     tunnelOut: 'Você saiu do outro lado do túnel!',
+    /** What happens in the hedge maze (`game/mazeRun.ts`). */
+    maze: {
+      key: (n: number, of: number) => `Chave ${n}/${of}!`,
+      locked: (left: number) => (left === 1 ? 'O baú está trancado: falta *1 chave*.' : `O baú está trancado: faltam *${left} chaves*.`),
+      cache: 'Um baú escondido num beco!',
+      decoy: 'Era uma isca!',
+      ambush: 'Algo se mexeu nas sebes!',
+      guard: 'O guardião do labirinto despertou!',
+      ring: 'O anel te levou para o outro lado!',
+      thief: 'Um ladrão veio atrás da chave!',
+    },
   },
   places: {
     names: { cave: 'Caverna Escura', graveyard: 'Cemitério Assombrado', sky: 'Acima das Nuvens' } satisfies Record<PlaceId, string>,

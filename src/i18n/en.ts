@@ -2304,7 +2304,7 @@ export const en: Messages = {
     hints: {
       cottage: 'Someone left a crate inside…',
       tunnel: 'Go in one mouth, come out the other.',
-      maze: 'A chest waits at the heart of the maze.',
+      maze: 'A chest waits at the heart of the maze. Something guards it.',
       ruins: 'The altar waits in silence.',
       camp: 'A backpack left behind by the fire.',
     },
@@ -2315,6 +2315,17 @@ export const en: Messages = {
       camp: 'You opened the forgotten backpack!',
     },
     tunnelOut: 'You came out the other side of the tunnel!',
+    /** What happens in the hedge maze (`game/mazeRun.ts`). */
+    maze: {
+      key: (n: number, of: number) => `Key ${n}/${of}!`,
+      locked: (left: number) => (left === 1 ? 'The chest is locked: *1 key* to go.' : `The chest is locked: *${left} keys* to go.`),
+      cache: 'A chest hidden in a dead end!',
+      decoy: 'It was a decoy!',
+      ambush: 'Something stirred in the hedges!',
+      guard: 'The maze’s guardian woke up!',
+      ring: 'The ring carried you to the other side!',
+      thief: 'A thief came after the key!',
+    },
   },
   places: {
     names: { cave: 'Dark Cave', graveyard: 'Haunted Graveyard', sky: 'Above the Clouds' },

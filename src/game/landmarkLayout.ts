@@ -181,6 +181,13 @@ export const MAZE_LAYOUTS: readonly MazeLayout[] = PROCGEN.maze
 /** Where the maze's corridors start (its north-west corner), around its anchor at the middle of the south side. */
 export const mazeOrigin = (cols: number = MAZE_DIM, rows: number = MAZE_DIM) => ({ x: -(cols * MAZE.cell) / 2, y: -rows * MAZE.cell })
 
+/** The box a hedge maze at anchor (x, y) fills, in world px: its north-west corner and size (the corridors only, hedges' thickness included). */
+export const mazeBox = (variant: number, x: number, y: number) => {
+  const { maze } = MAZE_LAYOUTS[variant % MAZE_COUNT]!
+  const o = mazeOrigin(maze.cols, maze.rows)
+  return { x: x + o.x, y: y + o.y, w: maze.cols * MAZE.cell, h: maze.rows * MAZE.cell }
+}
+
 /**
  * The hedges of one row line of a maze (`row` 0 is its north edge, `size` its
  * south one): the walls along it, the walls of the row of cells above it and
