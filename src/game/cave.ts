@@ -1,13 +1,15 @@
-import { clamp, retain, TAU } from '../engine/math'
+import { clamp, TAU } from '../engine/math'
 import { range, weightedPick } from '../engine/rng'
 import type { Circle, FloorPlan, Pt } from '../data/arenas'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import { CAVE, PLACE_FEET, PLACE_LOOT } from '../data/places'
 import { CAVE_SHOP } from '../data/caveShop'
+import { LIGHT_KINDS } from '../data/lightSources'
 import { CAVE_TRAP, caveLevel } from '../data/caveLevels'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { spawnAlpha } from './alphas'
 import { levelOf, levelsOf } from './caveLevel'
+import { onSources, type LightSource } from './lightSources'
 import { drawNpc, openShop, type CaveShop } from './caveShop'
 import { dropItem } from './consumables'
 import { floorShapes, generateFloor, generateFloorV2, roomAt, type DungeonFloor, type Rect } from './dungeon'
@@ -43,8 +45,8 @@ export type CaveState = {
   /** Where the stairs stand, in room px (null in the treasure chamber). */
   stairs: Pt | null
   chest: { x: number; y: number; progress: number; open: boolean } | null
-  /** Glowing crystals, in room px: light besides the player's. */
-  lights: readonly Pt[]
+  /** The floor's light sources (crystals), in room px: off, or on and lighting their space besides the player's light (`lightSources.ts`). */
+  sources: LightSource[]
   /** Wind warnings given so far (up to three). */
   wind: number
   /** The treasure chamber's Monster House has sprung. */
@@ -59,8 +61,6 @@ export type CaveState = {
   lantern: boolean
   compass: boolean
   fortune: boolean
-  /** Crystals (indices into `lights`) a player touched, seconds they still shine (kept full while a foot stays on them) and since when they've been lit (`CAVE.crystal`): their glow and the light they give their room (`render/caveSight.ts`). */
-  touched: Array<{ i: number; left: number; age: number }>
   /** The floor's hidden traps (`DungeonFloor.traps`) and whether each has gone off. */
   traps: Array<{ x: number; y: number; done: boolean }>
 }
@@ -127,19 +127,19 @@ const layFloor = (g: Game, x: number, y: number, index: number, level: number): 
   return {
     layout: { floor: floorShapes(plan) },
     solids: [
-      ...plan.crystals.map(([cx, cy], i) => solidAt('crystal', PLACE_FEET.crystal, x + cx, y + cy, i)),
+      ...plan.sources.map(([cx, cy], i) => solidAt('crystal', PLACE_FEET.crystal, x + cx, y + cy, i)),
       ...plan.rocks.map(([rx, ry], i) => solidAt('caveRock', PLACE_FEET.caveRock, x + rx, y + ry, i)),
     ],
     start: plan.start,
     plan,
     stairs: plan.stairs,
     chest: null,
-    lights: plan.crystals,
+    lights: plan.sources,
     shop,
   }
 }
 
-const stateOf = (f: Floor, floor: number, level: number): CaveState => ({ level, floor, plan: f.plan, stairs: f.stairs, chest: f.chest, lights: f.lights, wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [], visited: f.plan ? [f.plan.startRoom] : [], shop: f.shop, lantern: false, compass: false, fortune: false, touched: [], traps: f.plan ? f.plan.traps.map(([x, y]) => ({ x, y, done: false })) : [] })
+const stateOf = (f: Floor, floor: number, level: number): CaveState => ({ level, floor, plan: f.plan, stairs: f.stairs, chest: f.chest, sources: f.lights.map(([x, y]): LightSource => ({ x, y, kind: 'crystal', on: false, left: 0, age: 0 })), wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [], visited: f.plan ? [f.plan.startRoom] : [], shop: f.shop, lantern: false, compass: false, fortune: false, traps: f.plan ? f.plan.traps.map(([x, y]) => ({ x, y, done: false })) : [] })
 
 export const buildCave = (g: Game, x: number, y: number, level = 1) => {
   const f = layFloor(g, x, y, 0, level)
@@ -214,7 +214,7 @@ const darkSpot = (inside: CaveInside) => (g: Game) => {
       const room = seen[Math.floor(g.rng() * seen.length)]!
       // The brighter the room, the fewer foes the dark sends into it, and fewer still in rooms already explored, growing as the floor's clock runs down.
       const { explored, ramp } = CAVE_GEN.spawn
-      const level = levelsOf(plan, inside.state.touched.map((c) => c.i), CAVE.lit)[room]!
+      const level = levelsOf(plan, inside.state.sources, CAVE.lit)[room]!
       const calm = dm.sq(1 - level / CAVE.lit.max)
       const lingered = PROCGEN.cave ? 1 + (ramp * (floorTime(inside) - inside.left)) / floorTime(inside) : 1
       if (g.rng() >= explored * calm * lingered) continue
@@ -224,7 +224,7 @@ const darkSpot = (inside: CaveInside) => (g: Game) => {
     } else {
       // The treasure chamber: the same rule, with its crystals' light spread over the whole cavern.
       const { explored } = CAVE_GEN.spawn
-      const level = levelOf(inside.state.touched.length, Math.PI * CHAMBER.r * CHAMBER.r, CAVE.lit)
+      const level = levelOf(onSources(inside.state.sources).length, Math.PI * CHAMBER.r * CHAMBER.r, CAVE.lit)
       if (g.rng() >= explored * dm.sq(1 - level / CAVE.lit.max)) continue
       const a = range(g.rng, 0, TAU)
       const d = range(g.rng, 40, CHAMBER.r - 16)
@@ -342,20 +342,23 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
       springAmbush(g, inside, plan.rooms[room]!, plan.sizes[room]!, p)
     }
   }
-  // A crystal a player's foot touches lights up for a while and then goes out (touching it again lights it afresh).
-  for (const c of s.touched) {
-    c.left -= dt
-    c.age += dt
+  // A source a player's foot touches comes on for a while and then goes off (touching it again turns it on afresh).
+  for (const k of s.sources) {
+    if (!k.on) continue
+    k.left -= dt
+    k.age += dt
+    if (k.left <= 0) {
+      k.on = false
+      k.age = 0
+    }
   }
-  retain(s.touched, (c) => c.left > 0)
-  const { rx, ry } = CAVE.crystal
-  const time = CAVE.crystal.time * DEBUG_TUNE.crystal
-  s.lights.forEach(([lx, ly], i) => {
-    if (!g.players.some((p) => standing(g, p) && dm.sq((p.x - inside.x - lx) / rx) + dm.sq((p.y - inside.y - ly) / ry) <= 1)) return
-    const lit = s.touched.find((c) => c.i === i)
-    if (lit) lit.left = time
-    else s.touched.push({ i, left: time, age: 0 })
-  })
+  for (const k of s.sources) {
+    const kind = LIGHT_KINDS[k.kind]
+    if (!g.players.some((p) => standing(g, p) && dm.sq((p.x - inside.x - k.x) / kind.rx) + dm.sq((p.y - inside.y - k.y) / kind.ry) <= 1)) continue
+    if (!k.on) k.age = 0
+    k.on = true
+    k.left = kind.time * DEBUG_TUNE.source
+  }
   // Standing in the Cristalário's ring opens the sheet for whoever stands there.
   const shop = s.shop
   if (shop) {

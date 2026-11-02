@@ -1,10 +1,12 @@
 import { context2d, createCanvas } from '../engine/pixelart'
 import { caveLight } from '../game/cave'
-import { floorShapes, roomAt, type DungeonFloor } from '../game/dungeon'
+import { floorShapes, roomAt, spaceAt, type DungeonFloor } from '../game/dungeon'
+import { LIGHT_KINDS } from '../data/lightSources'
+import { onSources, seenLevels, spaceRects } from '../game/lightSources'
 import { CAVE } from '../data/places'
 import type { PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
-import { glintOf, lit, roomLevel, roomLevels } from './caveSight'
+import { lit, roomLevel, roomLevels } from './caveSight'
 
 /**
  * The cave's dark as one scalar field, drawn in a single pass. Every light is a
@@ -82,9 +84,11 @@ const lightmap = (w: number, h: number) => {
   return map
 }
 
-/** The rooms' levels as shown now: easing toward their goals (a room not entered is 0). */
+/** The spaces' levels as shown now (rooms, then corridors): easing toward their goals (a space not entered is 0). */
 const shownRooms = new WeakMap<DungeonFloor, number[]>()
 const shownChamber = new WeakMap<object, number>()
+/** The corridors (space indices) the team has walked, per floor. */
+const corridorsWalked = new WeakMap<DungeonFloor, Set<number>>()
 let lastAt = 0
 
 /**
@@ -99,21 +103,37 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
   lastAt = t
   const ease = Math.min(1, lit.fade * dt)
 
-  // Area lights: the rooms (a rect each) or the chamber (a circle), at their eased levels.
+  // The players in the floor's own px: how far a space is from them says how strongly its light is seen (`seenLevels`).
+  const team = g.players.filter((q) => !q.gone).map((q) => ({ x: q.x - inside.x, y: q.y - inside.y }))
+
+  // Area lights: the rooms and the corridors (a rect each, a corridor's stretches sharing a level) or the chamber (a circle), at their eased levels.
   type Area = { x0: number; y0: number; x1: number; y1: number; level: number } | { cx: number; cy: number; r: number; level: number }
   const areas: Area[] = []
+  let factor: readonly number[] = []
+  let spaceVisited = (_: number) => true
   if (plan) {
-    const goal = roomLevels(plan, s.touched.map((c) => c.i))
+    // A corridor counts as entered once a player has stood in it (kept here, for the screen only).
+    let walked = corridorsWalked.get(plan)
+    if (!walked) corridorsWalked.set(plan, (walked = new Set()))
+    for (const q of team) {
+      const space = spaceAt(plan, q.x, q.y)
+      if (space >= plan.rooms.length) walked.add(space)
+    }
+    spaceVisited = (space) => (space < plan.rooms.length ? s.visited.includes(space) : walked.has(space))
+    const goal = roomLevels(plan, s.sources)
+    const seen = seenLevels(plan, goal, spaceVisited, team, lit)
+    factor = seen.factor
     let shown = shownRooms.get(plan)
-    if (!shown) shownRooms.set(plan, (shown = plan.rooms.map(() => 0)))
-    plan.rooms.forEach((r, i) => {
-      shown![i] = shown![i]! + ((s.visited.includes(i) ? goal[i]! : 0) - shown![i]!) * ease
-      if (shown![i]! > 0.005) areas.push({ x0: inside.x + r.x, y0: inside.y + r.y, x1: inside.x + r.x + r.w, y1: inside.y + r.y + r.h, level: shown![i]! })
+    if (!shown) shownRooms.set(plan, (shown = goal.map(() => 0)))
+    goal.forEach((_, space) => {
+      shown![space] = shown![space]! + (seen.level[space]! - shown![space]!) * ease
+      if (shown![space]! <= 0.005) return
+      for (const r of spaceRects(plan, space)) areas.push({ x0: inside.x + r.x, y0: inside.y + r.y, x1: inside.x + r.x + r.w, y1: inside.y + r.y + r.h, level: shown![space]! })
     })
   } else {
     const c = inside.layout.floor[0]
     if (c?.kind === 'circle') {
-      const goal = roomLevel(lit.allOn ? s.lights.length : s.touched.length, Math.PI * c.r * c.r)
+      const goal = roomLevel(lit.allOn ? s.sources.length : onSources(s.sources).length, Math.PI * c.r * c.r)
       const now = (shownChamber.get(inside.layout) ?? 0) + (goal - (shownChamber.get(inside.layout) ?? 0)) * ease
       shownChamber.set(inside.layout, now)
       areas.push({ cx: inside.x + c.x, cy: inside.y + c.y, r: c.r, level: now })
@@ -138,26 +158,20 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
     points.push({ x: p.x, y: p.y - 10, r: (reach + flicker) * lit.playerScale, i: 1 })
     litBy.push([p.x, p.y - 10, reach * 0.8])
   }
-  // The players in the floor's own px (the crystals' glint is judged by where they are).
-  const team = g.players.filter((q) => !q.gone).map((q) => ({ x: q.x - inside.x, y: q.y - inside.y }))
-  s.lights.forEach(([lx, ly], i) => {
-    const x = inside.x + lx
-    const y = inside.y + ly - 6
-    // A crystal shows its full light only while it shines (touched, as the Nightmare's lanterns are); otherwise a dull glint, but only in a room already entered, and the same all over it (`glintOf`).
-    const shining = s.touched.find((c) => c.i === i)
-    if (lit.allOn || shining) {
-      // Eases in over its first moments and blinks in its last seconds before going out.
-      const age = shining ? shining.age : Infinity
-      const blinking = shining !== undefined && shining.left < CAVE.crystal.blink && Math.floor(t * 8) % 2 === 0
-      points.push({ x, y, r: lit.aura + Math.sin(t * 2 + lx) * lit.auraWaver, i: lit.auraGain * smooth(age / Math.max(0.01, lit.auraEase)) * (blinking ? lit.auraBlink : 1) })
-      litBy.push([x, y, lit.auraFoot])
-      return
-    }
-    // A crystal in a room nobody has entered gives no light at all: that room is dark to the team (`glows`, as for the stairs and the chest).
-    if (!lit.glint || !glows(inside.x + lx, inside.y + ly)) return
-    // A dull crystal glints the same all over its room and fades only once the players are out of it (`glintOf`).
-    const glint = lit.glintGain * glintOf(plan, [lx, ly], team)
-    if (glint > 0.02) points.push({ x, y, r: lit.glintR, i: glint })
+  // A light source gives light only while it is on (touched, as the Nightmare's lanterns are): off, nothing at all. On, it has its aura,
+  // weaker the farther its space is from the players (`factor`), eased in and blinking out at the end.
+  s.sources.forEach((k, i) => {
+    if (!(lit.allOn || k.on)) return
+    const space = plan ? spaceAt(plan, k.x, k.y) : -1
+    if (plan && space >= 0 && !spaceVisited(space)) return
+    const a = space >= 0 ? (factor[space] ?? 1) : 1
+    const x = inside.x + k.x
+    const y = inside.y + k.y - 6
+    const kind = LIGHT_KINDS[k.kind]
+    const age = k.on ? k.age : Infinity
+    const blinking = k.on && k.left < kind.blink && Math.floor(t * 8) % 2 === 0
+    points.push({ x, y, r: lit.aura + Math.sin(t * 2 + k.x + i) * lit.auraWaver, i: lit.auraGain * kind.strength * smooth(age / Math.max(0.01, lit.auraEase)) * (blinking ? lit.auraBlink : 1) * a })
+    litBy.push([x, y, lit.auraFoot * a])
   })
   if (s.stairs && glows(inside.x + s.stairs[0], inside.y + s.stairs[1])) points.push({ x: inside.x + s.stairs[0], y: inside.y + s.stairs[1], r: 24 + Math.sin(t * 3) * 2, i: 1 })
   if (s.chest && glows(inside.x + s.chest.x, inside.y + s.chest.y)) points.push({ x: inside.x + s.chest.x, y: inside.y + s.chest.y - 6, r: 30, i: 1 })

@@ -1,5 +1,6 @@
 import { CAVE_LEVELS } from '../data/caveLevels'
 import { CAVE_SHOP } from '../data/caveShop'
+import { LIGHT_FIELD, LIGHT_KINDS } from '../data/lightSources'
 import { HAZARD_HIT, HAZARD_PACE, HAZARD_RULES, WORLD_PATTERNS } from '../data/hazards'
 import { LANDMARK } from '../data/landmarks'
 import { GRAND, MAZE_RUN } from '../data/mazeEvents'
@@ -26,6 +27,8 @@ const TABLES: Record<string, object> = {
   CAVE,
   CAVE_GEN,
   CAVE_SHOP,
+  LIGHT_KINDS,
+  LIGHT_FIELD,
   CAVE_LEVELS,
   PLACE,
   GRAND,
@@ -71,18 +74,20 @@ const TAGS: Record<When, { label: string; color: string; note: string }> = {
 
 /** The first rule that matches `TABLE.path` says when the field takes effect; fields no rule matches have not been audited. */
 const WHEN: ReadonlyArray<readonly [RegExp, When]> = [
-  [/^CAVE_SHOP\.crystals$/, 'test'],
+  [/^CAVE_SHOP\.sources$/, 'test'],
+  [/^LIGHT_KINDS\./, 'live'],
+  [/^LIGHT_FIELD\./, 'captured'],
   [/^CAVE\.floors$/, 'unused'],
   [/^CAVE\.lit\./, 'split'],
   [/^CAVE\.card$/, 'floor'],
-  [/^CAVE\.(light|fireLight|electricLight|stairsRadius|wind|monsterHouse|chestRadius|chestTime|sight|crystal|phase)/, 'live'],
+  [/^CAVE\.(light|fireLight|electricLight|stairsRadius|wind|monsterHouse|chestRadius|chestTime|sight|phase)/, 'live'],
   [/^CAVE_SHOP\.(chance|shinyChance|shinyFrom|gemsPerPrize)$/, 'floor'],
   [/^CAVE_SHOP\./, 'live'],
   [/^CAVE_GEN\.(floorTime|chamberTime)/, 'floor'],
   [/^CAVE_GEN\.(wind|spawn|spawnPerFloor|packMax|packs)/, 'live'],
   [/^CAVE_GEN\./, 'floor'],
   // A cave's level row: laid out when a floor is made, the rest read as it plays; only the row of the cave's own level matters.
-  [/^CAVE_LEVELS\.\[\d\]\.(floors|grid|big|ambush|items|crystals|traps|reward\.(coins|gems|items|shiny))$/, 'floor'],
+  [/^CAVE_LEVELS\.\[\d\]\.(floors|grid|big|ambush|items|sources|traps|reward\.(coins|gems|items|shiny))$/, 'floor'],
   [/^CAVE_LEVELS\./, 'diff'],
   [/^PLACE\.firstAt$/, 'run'],
   [/^PLACE\.(every|jitter|openTime|bossWait)$/, 'later'],

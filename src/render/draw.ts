@@ -1,4 +1,3 @@
-import { CAVE } from '../data/places'
 import { drawEvoItem } from './evoItemArt'
 import { blitCentered, blitPacked, blitEllipse, blitRing, blitRotated, context2d, createCanvas, lazy, textSprite } from '../engine/pixelart'
 import { HAZARD_COLORS } from './hazardColors'
@@ -64,6 +63,7 @@ import { drawHauntedNight, drawTreat } from './halloweenArt'
 import { drawMazeGround } from './mazeArt'
 import { mazeSees, rememberMazes } from './mazeSight'
 import { drawDebugOverlay } from './debugOverlay'
+import { LIGHT_KINDS } from '../data/lightSources'
 import { drawSolid, drawTerrainGround, drawWading, keepTerrain, solidCovers, solidsInView, warmTerrain } from './terrain'
 import { drawGround, GROUND_LOOKAHEAD, warmGround } from './world'
 import { damageBudget, showsText, textAlpha, type DamageNumbers } from './damageNumbers'
@@ -454,21 +454,19 @@ export const drawSparkles = (ctx: Ctx, x: number, cy: number, size: number, sinc
 }
 
 /**
- * The cave's crystals a player touched sparkle as a shiny does (the burst, then twinkles) for as long as they shine, and flicker out
- * in their last seconds (`CAVE.crystal`). Over the world, after what stands in front of them.
+ * The cave's light sources that are on sparkle as a shiny does (the burst, then twinkles) for as long as they are on, and flicker out
+ * in their last seconds (`LIGHT_KINDS`). Over the world, after what stands in front of them.
  */
 const drawCrystalGlints = (ctx: Ctx, g: Game) => {
   const inside = g.place.inside
   if (inside?.id !== 'cave') return
-  const { blink } = CAVE.crystal
-  for (const c of inside.state.touched) {
-    const at = inside.state.lights[c.i]
-    if (!at) continue
+  inside.state.sources.forEach((k, i) => {
+    if (!k.on) return
     // Blinking: every other eighth of a second off.
-    if (c.left < blink && Math.floor(g.now * 8) % 2 === 0) continue
-    // Only the twinkle of a shiny (its burst is for an entrance): `since` stays past the burst, so a foot held on the crystal never restarts it.
-    drawSparkles(ctx, inside.x + at[0], inside.y + at[1] - 9, 26, 1 + g.now, 40 + c.i)
-  }
+    if (k.left < LIGHT_KINDS[k.kind].blink && Math.floor(g.now * 8) % 2 === 0) return
+    // Only the twinkle of a shiny (its burst is for an entrance): `since` stays past the burst, so a foot held on the source never restarts it.
+    drawSparkles(ctx, inside.x + k.x, inside.y + k.y - 9, 26, 1 + g.now, 40 + i)
+  })
 }
 
 /* ---------------- Entities ---------------- */

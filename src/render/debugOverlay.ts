@@ -1,5 +1,6 @@
 import { CAVE_SHOP } from '../data/caveShop'
 import { CAVE_TRAP } from '../data/caveLevels'
+import { LIGHT_KINDS } from '../data/lightSources'
 import { GRAND, MAZE_RUN, mazeTheme } from '../data/mazeEvents'
 import { CAVE } from '../data/places'
 import { TERRAIN } from '../data/terrain'
@@ -79,7 +80,7 @@ export const VIEW_GROUPS: ReadonlyArray<{ group: string; items: ReadonlyArray<{ 
     items: [
       { key: 'rooms', label: 'Rooms and corridors (seen, ambush, sanctuary, traps)' },
       { key: 'levels', label: 'Light level of each room' },
-      { key: 'caveRadii', label: 'Radii: stairs, chest, Cristalário, traps, crystals (timers)' },
+      { key: 'caveRadii', label: 'Radii: stairs, chest, Cristalário, traps, light sources (on/off, timers)' },
       { key: 'caveSight', label: 'Foes’ sight and hearing rings' },
     ],
   },
@@ -251,7 +252,7 @@ const caveRooms = (ctx: Ctx, g: Game, cx: number, cy: number, levels: boolean, r
   if (inside?.id !== 'cave' || !inside.state.plan) return
   const s = inside.state
   const plan = s.plan!
-  const lv = levels ? roomLevels(plan, s.touched.map((c) => c.i)) : null
+  const lv = levels ? roomLevels(plan, s.sources) : null
   const here = new Set(g.players.map((p) => roomAt(plan, p.x - inside.x, p.y - inside.y)))
   plan.rooms.forEach((r, i) => {
     const x = inside.x + r.x - cx
@@ -289,12 +290,12 @@ const caveRadii = (ctx: Ctx, g: Game, cx: number, cy: number) => {
     ring(ctx, x, y, CAVE_SHOP.radius, '#c080ff')
     label(ctx, `shop ${s.shop.npc} ${s.shop.stand.toFixed(1)}/${CAVE_SHOP.stand}s`, x, y - CAVE_SHOP.radius - 3, '#c080ff')
   }
-  s.lights.forEach(([lx, ly], i) => {
-    const [x, y] = at([lx, ly])
+  s.sources.forEach((k) => {
+    const [x, y] = at([k.x, k.y])
     if (!inView(g, cx, cy, x + cx, y + cy)) return
-    const on = s.touched.find((c) => c.i === i)
-    ellipse(ctx, x, y, CAVE.crystal.rx, CAVE.crystal.ry, on ? '#80e0ff' : '#406080')
-    if (on) label(ctx, `${on.left.toFixed(0)}s`, x, y - CAVE.crystal.ry - 3, '#80e0ff')
+    const kind = LIGHT_KINDS[k.kind]
+    ellipse(ctx, x, y, kind.rx, kind.ry, k.on ? '#80e0ff' : '#406080')
+    label(ctx, k.on ? `${k.kind} on ${k.left.toFixed(0)}s` : `${k.kind} off`, x, y - kind.ry - 3, k.on ? '#80e0ff' : '#6080a0')
   })
 }
 

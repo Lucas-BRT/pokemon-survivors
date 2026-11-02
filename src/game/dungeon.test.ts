@@ -17,7 +17,7 @@ describe('generateFloor', () => {
         expect(dist[f.stairsRoom]).toBe(Math.max(...dist))
         expect(roomAt(f, ...f.stairs)).toBe(f.stairsRoom)
         expect(roomAt(f, ...f.start)).toBe(f.startRoom)
-        for (const p of [...f.items, ...f.crystals, ...f.rocks]) expect(onFloor(f, p, 4)).toBe(true)
+        for (const p of [...f.items, ...f.sources, ...f.rocks]) expect(onFloor(f, p, 4)).toBe(true)
       }
     }
   })
@@ -140,7 +140,7 @@ describe('generateFloorV2', () => {
           expect(prizes).toHaveLength(1 + (f.sizes[room]! >= 4 ? 1 : 0) + (f.sizes[room]! >= 6 ? 1 : 0))
         }
         expect(f.prizes.every((p) => f.ambush.includes(roomAt(f, ...p)))).toBe(true)
-        for (const p of [...f.items, ...f.crystals, ...f.rocks, ...f.prizes]) expect(onFloor(f, p, 4)).toBe(true)
+        for (const p of [...f.items, ...f.sources, ...f.rocks, ...f.prizes]) expect(onFloor(f, p, 4)).toBe(true)
       }
     }
   })
@@ -185,14 +185,14 @@ describe('generateFloorV2 corridors', () => {
           links++
           if (across ? l.path[0]![1] === l.path[3]![1] : l.path[0]![0] === l.path[3]![0]) straight++
         }
-        for (const p of f.crystals) expect(onFloor(f, p, 4)).toBe(true)
+        for (const p of f.sources) expect(onFloor(f, p, 4)).toBe(true)
       }
     }
     expect(straight / links).toBeGreaterThan(0.8)
   })
 
   it('lights the long straight corridors with crystals', () => {
-    const f = v2(1).find((x) => x.crystals.some((c) => roomAt(x, ...c) < 0))
+    const f = v2(1).find((x) => x.sources.some((c) => roomAt(x, ...c) < 0))
     expect(f).toBeDefined()
   })
 

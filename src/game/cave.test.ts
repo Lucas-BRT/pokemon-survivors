@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { caveLevel, drawCaveLevel } from '../data/caveLevels'
+import { LIGHT_KINDS } from '../data/lightSources'
 import { createRng } from '../engine/rng'
 import { CAVE } from '../data/places'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
@@ -207,25 +208,26 @@ describe.skipIf(!PROCGEN.cave)('the dark’s spawns', () => {
   })
 })
 
-describe.skipIf(!PROCGEN.cave)('the cave’s crystals', () => {
-  it('light up when a player walks up to them, and stay lit', () => {
+describe.skipIf(!PROCGEN.cave)('the cave’s light sources', () => {
+  it('turn on when a player walks up to them, and stay on', () => {
     const { g, inside } = inCave(7)
-    const [lx, ly] = inside.state.lights[0]!
-    const { rx, time, blink } = CAVE.crystal
-    expect(inside.state.touched).toEqual([])
+    const { x: lx, y: ly } = inside.state.sources[0]!
+    const { rx, time, blink } = LIGHT_KINDS.crystal
+    const on = () => inside.state.sources.map((k, i) => (k.on ? i : -1)).filter((i) => i >= 0)
+    expect(on()).toEqual([])
     // Near, but not against it: nothing.
     Object.assign(g.player, { x: inside.x + lx + rx + 8, y: inside.y + ly })
     updateCave(g, inside, TICK)
-    expect(inside.state.touched).toEqual([])
+    expect(on()).toEqual([])
     Object.assign(g.player, { x: inside.x + lx + rx - 3, y: inside.y + ly })
     updateCave(g, inside, TICK)
-    expect(inside.state.touched.map((c) => c.i)).toContain(0)
-    // It keeps shining after the player walks off, then goes out.
+    expect(on()).toContain(0)
+    // It stays on after the player walks off, then goes off.
     Object.assign(g.player, { x: inside.x + lx + 400, y: inside.y + ly })
     updateCave(g, inside, time - blink)
-    expect(inside.state.touched.map((c) => c.i)).toContain(0)
+    expect(on()).toContain(0)
     updateCave(g, inside, blink + 1)
-    expect(inside.state.touched).toEqual([])
+    expect(on()).toEqual([])
   })
 
   it('grows with its level: more floors, bigger floors, a shorter clock, hidden traps and a richer chest', () => {

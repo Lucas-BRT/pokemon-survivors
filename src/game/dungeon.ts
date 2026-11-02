@@ -27,8 +27,8 @@ export type DungeonFloor = {
   startRoom: number
   stairsRoom: number
   items: readonly Pt[]
-  /** Glowing crystals (light and cover) and stalagmites (cover). */
-  crystals: readonly Pt[]
+  /** Light sources (crystals: light and cover) and stalagmites (cover). */
+  sources: readonly Pt[]
   rocks: readonly Pt[]
   /** Rooms that spring an ambush when first entered, and the prizes lying in them, more in the bigger ones (the generated floors, `generateFloorV2`). */
   ambush: readonly number[]
@@ -37,7 +37,7 @@ export type DungeonFloor = {
   sizes: readonly number[]
   /** Where hidden traps lie (a telegraphed rockfall when stepped on): the deeper cave levels only, none otherwise. */
   traps: readonly Pt[]
-  /** The Cristalário's room (`CAVE_SHOP`): crystals all round, a peaceful dweller in the middle, no ambush; -1 for none (the older floors). */
+  /** The Cristalário's room (`CAVE_SHOP`): light sources all round, a peaceful dweller in the middle, no ambush; -1 for none (the older floors). */
   sanctuary: number
 }
 
@@ -215,9 +215,9 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
   const all = rooms.map((_, i) => i)
   const others = all.filter((i) => i !== startRoom)
   const items = scatter(DUNGEON.items, others, 40, (r) => spotIn(rng, r, 18))
-  const crystals = scatter(Math.ceil(rooms.length / 2), all, 50, (r) => cornerIn(rng, r))
+  const sources = scatter(Math.ceil(rooms.length / 2), all, 50, (r) => cornerIn(rng, r))
   const rocks = scatter(rooms.length, others, 36, (r) => spotIn(rng, r, 26))
-  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush: [], prizes: [], sizes: rooms.map(() => 1), sanctuary: -1, traps: [] }
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, sources, rocks, ambush: [], prizes: [], sizes: rooms.map(() => 1), sanctuary: -1, traps: [] }
 }
 
 /**
@@ -432,16 +432,16 @@ export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLev
   const others = all.filter((i) => i !== startRoom && i !== sanctuary)
   const plain = others.filter((i) => !ambush.includes(i))
   const items = scatter(CAVE_GEN.items[k]! + lv.items, plain.length > 0 ? plain : others, 40, (r) => spotIn(rng, r, 18))
-  const crystals = scatter(Math.max(3, Math.ceil((rooms.length / 4) * lv.crystals)), all.filter((i) => i !== sanctuary), 50, (r) => cornerIn(rng, r))
+  const sources = scatter(Math.max(3, Math.ceil((rooms.length / 4) * lv.sources)), all.filter((i) => i !== sanctuary), 50, (r) => cornerIn(rng, r))
   if (sanctuary >= 0) {
-    // Ringed by crystals, the middle left for the dweller: the four corners and the middle of the two sides.
+    // Ringed by light sources, the middle left for the dweller: the four corners and the middle of the two sides.
     const r = rooms[sanctuary]!
     const [cx, cy] = center(r)
     const [l, rt, t, b] = [r.x + 14, r.x + r.w - 14, r.y + 14, r.y + r.h - 12]
-    crystals.push([l, t], [rt, t], [l, b], [rt, b], [r.x + 12, cy])
+    sources.push([l, t], [rt, t], [l, b], [rt, b], [r.x + 12, cy])
     taken.push([cx, cy])
   }
-  // A crystal on the wall side of the long straight corridors, to light the way between rooms (the middle stays clear for walking).
+  // A light source on the wall side of the long straight corridors, to light the way between rooms (the middle stays clear for walking).
   let lit = 0
   for (const l of links) {
     const [ax, ay] = l.path[0]!
@@ -457,7 +457,7 @@ export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLev
     for (let i = 0; i < n; i++) {
       const along = dm.round(from + ((to - from) * (i + 1)) / (n + 1))
       const off = (rng() < 0.5 ? -side : side)
-      crystals.push(across ? [along, ay + off] : [ax + off, along])
+      sources.push(across ? [along, ay + off] : [ax + off, along])
     }
   }
   // Hidden traps in the regular rooms and the ones ambush packs spare, never the start's, the stairs' or the Cristalário's.
@@ -465,7 +465,7 @@ export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLev
   const cover = rooms.length + sizes.reduce((a, s) => a + (s - 1), 0)
   const rocks = scatter(cover, others, 36, (r) => spotIn(rng, r, 26))
   void dist
-  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush, prizes, sizes, sanctuary, traps }
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, sources, rocks, ambush, prizes, sizes, sanctuary, traps }
 }
 
 /**

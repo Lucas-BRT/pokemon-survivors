@@ -54,8 +54,8 @@ export const CAVE_SHOP = {
   radius: 28,
   /** Wares on the table at once. */
   offers: 4,
-  /** Crystals ringing the room, at least. Only the tests read it: `generateFloorV2` places the room's five itself, so editing this changes nothing. */
-  crystals: 5,
+  /** Light sources ringing the room, at least. Only the tests read it: `generateFloorV2` places the room's five itself, so editing this changes nothing. */
+  sources: 5,
   /** Share of the floors that have a Cristalário. */
   chance: 0.6,
   /** Chance a floor from `shinyFrom` (0 is B1F) on has the shiny Sableye instead of the regular dweller. */

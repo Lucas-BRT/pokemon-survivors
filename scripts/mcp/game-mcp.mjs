@@ -148,7 +148,7 @@ const TOOLS = [
   },
   {
     name: 'game_tune',
-    description: 'Sets a debug knob: group "tune" (world, cap, place, placeCap, maze, crystal: spawn rates and caps, 1 = normal), "run" (scale: simulation speed, 0 pauses; steps: ticks to play now), "stats" (player stat deltas, e.g. maxHp, speed, might) or "view" (overlay layers, true/false). Without key and value it lists the group.',
+    description: 'Sets a debug knob: group "tune" (world, cap, place, placeCap, maze, source: spawn rates and caps, 1 = normal), "run" (scale: simulation speed, 0 pauses; steps: ticks to play now), "stats" (player stat deltas, e.g. maxHp, speed, might) or "view" (overlay layers, true/false). Without key and value it lists the group.',
     inputSchema: { type: 'object', properties: { group: { type: 'string', enum: ['tune', 'run', 'stats', 'view'] }, key: str, value: {} }, required: ['group'] },
   },
   {

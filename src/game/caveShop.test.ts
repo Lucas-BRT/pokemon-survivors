@@ -27,8 +27,8 @@ describe('the Cristalário’s room', () => {
       found++
       expect([f.startRoom, f.stairsRoom, ...f.ambush]).not.toContain(f.sanctuary)
       const r = f.rooms[f.sanctuary]!
-      const inside = f.crystals.filter(([x, y]) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
-      expect(inside.length).toBeGreaterThanOrEqual(CAVE_SHOP.crystals)
+      const inside = f.sources.filter(([x, y]) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+      expect(inside.length).toBeGreaterThanOrEqual(CAVE_SHOP.sources)
     }
     expect(found).toBeGreaterThan(15)
   })

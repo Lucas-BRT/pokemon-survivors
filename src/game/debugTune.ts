@@ -12,8 +12,8 @@ export const DEBUG_TUNE = {
   place: 1,
   placeCap: 1,
   maze: 1,
-  /** Multiplier on the seconds a cave crystal shines once touched. */
-  crystal: 1,
+  /** Multiplier on the seconds a cave light source stays on once touched. */
+  source: 1,
 }
 
 export const resetTune = () => {
@@ -22,7 +22,7 @@ export const resetTune = () => {
   DEBUG_TUNE.place = 1
   DEBUG_TUNE.placeCap = 1
   DEBUG_TUNE.maze = 1
-  DEBUG_TUNE.crystal = 1
+  DEBUG_TUNE.source = 1
   for (const k of TUNED_STATS) delete DEBUG_STATS[k]
   DEBUG_RUN.scale = 1
   DEBUG_RUN.steps = 0

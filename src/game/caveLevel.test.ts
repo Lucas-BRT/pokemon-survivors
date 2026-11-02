@@ -5,7 +5,7 @@ import { levelOf } from './caveLevel'
 describe('a cave room’s level of light', () => {
   const n = CAVE.lit
 
-  it('starts at the floor with no crystal, grows with each and never passes the ceiling', () => {
+  it('starts at the floor with no source on, grows with each and never passes the ceiling', () => {
     const area = n.aref
     expect(levelOf(0, area, n)).toBeCloseTo(n.floor)
     let before = levelOf(0, area, n)
@@ -17,7 +17,7 @@ describe('a cave room’s level of light', () => {
     }
   })
 
-  it('takes more crystals to light a bigger room', () => {
+  it('takes more sources to light a bigger room', () => {
     expect(levelOf(1, n.aref * 12, n)).toBeLessThan(levelOf(1, n.aref, n))
   })
 })

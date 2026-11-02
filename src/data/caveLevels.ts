@@ -23,8 +23,8 @@ export type CaveLevel = {
   /** Multiplier on the dark's spawn rate and on every floor's clock (the wind). */
   spawn: number
   time: number
-  /** Share of a floor's crystals kept (fewer lights, a darker cave). */
-  crystals: number
+  /** Share of a floor's light sources kept (fewer lights, a darker cave). */
+  sources: number
   /** Hidden traps per floor (a telegraphed rockfall when stepped on), and Monster House foes added. */
   traps: number
   house: number
@@ -47,11 +47,11 @@ export type CaveLevel = {
 export const CAVE_TRAP = { trigger: 18 } as const
 
 export const CAVE_LEVELS: readonly CaveLevel[] = [
-  { floors: 3, grid: 0, big: 0, ambush: 0, items: 0, packShift: 0, packSize: 1, leaderCells: 0, spawn: 1, time: 1, crystals: 1, traps: 0, house: 0, reward: { coins: 0, gems: 0, items: 0, chestItems: 0, chestCandies: 0, egg: 'place', wares: 0, shiny: 0 } },
-  { floors: 3, grid: 1, big: 1, ambush: 0, items: 1, packShift: 0, packSize: 1.25, leaderCells: 1, spawn: 1.15, time: 0.95, crystals: 1, traps: 2, house: 2, reward: { coins: 1, gems: 1, items: 0, chestItems: 1, chestCandies: 0, egg: 'place', wares: 0, shiny: 0.02 } },
-  { floors: 4, grid: 2, big: 1, ambush: 1, items: 1, packShift: 1, packSize: 1.4, leaderCells: 1, spawn: 1.3, time: 0.9, crystals: 0.85, traps: 3, house: 4, reward: { coins: 2, gems: 2, items: 1, chestItems: 2, chestCandies: 1, egg: 'rift', wares: 1, shiny: 0.04 } },
-  { floors: 4, grid: 3, big: 2, ambush: 1, items: 2, packShift: 1, packSize: 1.6, leaderCells: 2, spawn: 1.5, time: 0.85, crystals: 0.7, traps: 4, house: 7, reward: { coins: 3, gems: 3, items: 1, chestItems: 3, chestCandies: 2, egg: 'rift', wares: 1, shiny: 0.06 } },
-  { floors: 5, grid: 4, big: 2, ambush: 2, items: 2, packShift: 2, packSize: 1.8, leaderCells: 2, spawn: 1.7, time: 0.8, crystals: 0.55, traps: 5, house: 10, reward: { coins: 4, gems: 4, items: 2, chestItems: 4, chestCandies: 3, egg: 'final', wares: 2, shiny: 0.1 } },
+  { floors: 3, grid: 0, big: 0, ambush: 0, items: 0, packShift: 0, packSize: 1, leaderCells: 0, spawn: 1, time: 1, sources: 1, traps: 0, house: 0, reward: { coins: 0, gems: 0, items: 0, chestItems: 0, chestCandies: 0, egg: 'place', wares: 0, shiny: 0 } },
+  { floors: 3, grid: 1, big: 1, ambush: 0, items: 1, packShift: 0, packSize: 1.25, leaderCells: 1, spawn: 1.15, time: 0.95, sources: 1, traps: 2, house: 2, reward: { coins: 1, gems: 1, items: 0, chestItems: 1, chestCandies: 0, egg: 'place', wares: 0, shiny: 0.02 } },
+  { floors: 4, grid: 2, big: 1, ambush: 1, items: 1, packShift: 1, packSize: 1.4, leaderCells: 1, spawn: 1.3, time: 0.9, sources: 0.85, traps: 3, house: 4, reward: { coins: 2, gems: 2, items: 1, chestItems: 2, chestCandies: 1, egg: 'rift', wares: 1, shiny: 0.04 } },
+  { floors: 4, grid: 3, big: 2, ambush: 1, items: 2, packShift: 1, packSize: 1.6, leaderCells: 2, spawn: 1.5, time: 0.85, sources: 0.7, traps: 4, house: 7, reward: { coins: 3, gems: 3, items: 1, chestItems: 3, chestCandies: 2, egg: 'rift', wares: 1, shiny: 0.06 } },
+  { floors: 5, grid: 4, big: 2, ambush: 2, items: 2, packShift: 2, packSize: 1.8, leaderCells: 2, spawn: 1.7, time: 0.8, sources: 0.55, traps: 5, house: 10, reward: { coins: 4, gems: 4, items: 2, chestItems: 4, chestCandies: 3, egg: 'final', wares: 2, shiny: 0.1 } },
 ]
 
 /** The settings of level `n` (1 to 5; anything else is clamped). */

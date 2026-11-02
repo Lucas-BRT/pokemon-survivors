@@ -21,7 +21,7 @@ import type { Game } from './types'
  */
 export type DebugStart = { place: PlaceId | null; level: number; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; inside: boolean; biome: BiomeId | null }
 
-/** The light lab (`&lab=S:C:D`): one room of S times the reference area, C crystals inside it, D in its door tile. */
+/** The light lab (`&lab=S:C:D`): one room of S times the reference area, C light sources inside it, D in its door tile. */
 export type Lab = { size: number; inside: number; doors: number; vertical: 0 | 1 | 2 }
 
 const parseLab = (v: string | null): Lab | null => {
@@ -41,11 +41,11 @@ const transpose = (p: DungeonFloor, up: boolean): DungeonFloor => {
     links: p.links.map((l) => ({ ...l, path: l.path.map(pt), rects: l.rects.map(t) })),
     start: [...pt(p.start)],
     stairs: [...pt(p.stairs)],
-    crystals: p.crystals.map((c) => [...pt(c)]),
+    sources: p.sources.map((c) => [...pt(c)]),
   }
 }
 
-/** A floor of one room (the lab's) and a small one past a corridor, with the crystals the lab asks for: a room to judge the cave's light by. */
+/** A floor of one room (the lab's) and a small one past a corridor, with the light sources the lab asks for: a room to judge the cave's light by. */
 export const labPlan = ({ size, inside, doors, vertical }: Lab): DungeonFloor => {
   const area = size * CAVE.lit.aref
   const w = Math.round(Math.sqrt(area * 1.25))
@@ -54,11 +54,11 @@ export const labPlan = ({ size, inside, doors, vertical }: Lab): DungeonFloor =>
   const next: Rect = { x: room.x + w + 110, y: -40, w: 100, h: 80 }
   const cx = Math.round(next.x + next.w / 2)
   const mx = Math.round((room.x + w + next.x) / 2)
-  const crystals = Array.from({ length: inside }, (_, i): [number, number] => {
+  const sources = Array.from({ length: inside }, (_, i): [number, number] => {
     const a = (i / Math.max(1, inside)) * Math.PI * 2 + 0.6
     return [Math.round(Math.cos(a) * w * 0.36), Math.round(Math.sin(a) * h * 0.34)]
   })
-  for (let i = 0; i < doors; i++) crystals.push([room.x + w + 14, i % 2 ? 14 : -14])
+  for (let i = 0; i < doors; i++) sources.push([room.x + w + 14, i % 2 ? 14 : -14])
   const plan: DungeonFloor = {
     rooms: [room, next],
     links: [{ a: 0, b: 1, path: [[0, 0], [mx, 0], [mx, 0], [cx, 0]], rects: [{ x: -22, y: -22, w: cx + 44, h: 44 }] }],
@@ -67,7 +67,7 @@ export const labPlan = ({ size, inside, doors, vertical }: Lab): DungeonFloor =>
     startRoom: 0,
     stairsRoom: 1,
     items: [],
-    crystals,
+    sources,
     rocks: [],
     ambush: [],
     traps: [],

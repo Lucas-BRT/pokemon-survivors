@@ -1,7 +1,9 @@
 import { CAVE } from '../data/places'
 import { caveLight } from '../game/cave'
 import { levelOf, levelsOf } from '../game/caveLevel'
-import { roomAt, spaceAt, type DungeonFloor, type Rect } from '../game/dungeon'
+import { LIGHT_FIELD } from '../data/lightSources'
+import { onSources, type LightSource } from '../game/lightSources'
+import { spaceAt, type DungeonFloor, type Rect } from '../game/dungeon'
 import type { Game } from '../game/types'
 
 /**
@@ -78,66 +80,43 @@ export const caveFog = (g: Game, plan: DungeonFloor, visited: readonly number[],
 export const wasSeen = (seen: ReadonlySet<number>, x: number, y: number) => seen.has(fogKey(Math.floor(x / SEEN_SCALE), Math.floor(y / SEEN_SCALE)))
 
 /**
- * The cave's light numbers as the screen reads them: `CAVE.lit`'s, plus the spill into corridors, the crystals' aura and a scale for the player's light.
- * A copy the dev light menu (`ui/lightMenu.ts`) edits at run time; `retune` after a change so the levels are worked out again.
+ * The cave's light numbers as the screen reads them: `CAVE.lit`'s, plus the spill into corridors, the light sources' aura, how their
+ * light is seen from another space (`LIGHT_FIELD`) and a scale for the player's light.
+ * A copy the debug menu (`ui/debugMenu.ts`) edits at run time; `retune` after a change so the levels are worked out again.
  */
-export type Lit = { -readonly [K in keyof typeof CAVE.lit]: number } & {
+export type Lit = { -readonly [K in keyof typeof CAVE.lit]: number } & { -readonly [K in keyof typeof LIGHT_FIELD]: number } & {
   spill: number
   rim: number
   allOn: number
   aura: number
   auraGain: number
   playerScale: number
-  /** A shining crystal: seconds its light takes to ease in, px its radius wavers, the share of its light kept while it blinks out, and the radius (px) of the lit spot round its foot. */
+  /** A source that is on: seconds its light takes to ease in, px its radius wavers, the share of its light kept while it blinks out, and the radius (px) of the lit spot round its foot. */
   auraEase: number
   auraWaver: number
   auraBlink: number
   auraFoot: number
-  /** A crystal that doesn't shine (0 off, 1 on): the dull glint's radius (px), its strength, how far (px) past its room's walls a player can be and still see it at full (inside the room it never fades; in a corridor the distance is to the crystal), and how far past that it fades out. */
-  glint: number
-  glintR: number
-  glintGain: number
-  glintNear: number
-  glintFade: number
 }
-export const LIT_DEFAULTS: Lit = { ...CAVE.lit, spill: 32, rim: 6, allOn: 0, aura: 30, auraGain: 0.65, playerScale: 1, auraEase: 0.4, auraWaver: 1.5, auraBlink: 0.3, auraFoot: 26, glint: 1, glintR: 9, glintGain: 0.7, glintNear: 60, glintFade: 90 }
+export const LIT_DEFAULTS: Lit = { ...CAVE.lit, ...LIGHT_FIELD, spill: 32, rim: 6, allOn: 0, aura: 30, auraGain: 0.65, playerScale: 1, auraEase: 0.4, auraWaver: 1.5, auraBlink: 0.3, auraFoot: 26 }
 export const lit: Lit = { ...LIT_DEFAULTS }
 let tuning = 0
 export const retune = () => void tuning++
 
-/** A room's level of light, 0..1 (`lit`): the crystals' energy `e` spread over a room of `area` px² (`game/caveLevel.ts`). */
+/** A room's level of light, 0..1 (`lit`): the sources' energy `e` spread over a room of `area` px² (`game/lightSources.ts`). */
 export const roomLevel = (e: number, area: number) => levelOf(e, area, lit)
 
 const levelsCache = new WeakMap<DungeonFloor, { key: string; levels: number[] }>()
 
 /**
- * Each room's level of light on floor `plan`: a crystal inside counts whole, one standing in a corridor close to the room
- * counts `CAVE.lit.door` of its strength, less the farther from the room. Only the crystals the team has touched
- * (`CaveState.touched`'s indices into `plan.crystals`, while they shine) give light; `lit.allOn` counts them all (the lab). Worked out again when that changes.
+ * Every space's level of light on floor `plan` (the rooms first, then the corridors): the sources on in a space count whole, the ones
+ * in a corridor close to a room count `lit.door` of their strength there, less the farther from it. `lit.allOn` counts every source
+ * (the lab). Worked out again when the sources on, or the numbers, change.
  */
-export const roomLevels = (plan: DungeonFloor, touched: readonly number[]): readonly number[] => {
-  const key = `${tuning}:${touched.join(',')}:${lit.allOn}`
+export const roomLevels = (plan: DungeonFloor, sources: readonly LightSource[]): readonly number[] => {
+  const key = `${tuning}:${onSources(sources).join(',')}:${lit.allOn}`
   const known = levelsCache.get(plan)
   if (known && known.key === key) return known.levels
-  const levels = levelsOf(plan, touched, lit, lit.allOn === 1)
+  const levels = levelsOf(plan, sources, lit, lit.allOn === 1)
   levelsCache.set(plan, { key, levels })
   return levels
-}
-
-/**
- * How strongly a crystal that isn't shining glints (0..1, before `glintGain`): constant while a player is in its room, wherever in it
- * they stand, and fading only once they are out of it, by their distance to its walls (`glintNear` px of grace, then `glintFade` px
- * to nothing); `caveDark` shows it only for rooms already entered. A crystal in a corridor has no room: the distance is to the crystal itself. In the treasure chamber (`plan` null) the
- * whole cavern is one room. `players` and the crystal (`at`) are in the floor's own px.
- */
-export const glintOf = (plan: DungeonFloor | null, at: readonly [number, number], players: ReadonlyArray<{ x: number; y: number }>, n: Pick<Lit, 'glintNear' | 'glintFade'> = lit) => {
-  const room = plan ? roomAt(plan, at[0], at[1]) : -1
-  const walls = room >= 0 ? plan!.rooms[room]! : null
-  let nearest = Infinity
-  for (const q of players) {
-    const d = !plan ? 0 : walls ? Math.hypot(Math.max(walls.x - q.x, 0, q.x - (walls.x + walls.w)), Math.max(walls.y - q.y, 0, q.y - (walls.y + walls.h))) : Math.hypot(q.x - at[0], q.y - at[1])
-    nearest = Math.min(nearest, d)
-  }
-  const k = Math.max(0, Math.min(1, (nearest - n.glintNear) / Math.max(1, n.glintFade)))
-  return 1 - k * k * (3 - 2 * k)
 }

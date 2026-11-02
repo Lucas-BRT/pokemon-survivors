@@ -109,12 +109,6 @@ export const CAVE = {
    * `range` px, or anyone within `hear` px even through a wall, or the one that hit it. It then hunts for
    * `memory` seconds after losing sight (an ambush pack hunts for `ambush`), and ambles about otherwise.
    */
-  /**
-   * A crystal lights only when a player's foot is against it (an ellipse round its base, `rx` and `ry` px: the crystal's own foot plus the
-   * player's, so it takes a real touch), as the Nightmare's jack-o'-lanterns do. It shines `time` s (sparkling as a shiny does), blinks for
-   * the last `blink` s and goes out; touching it again lights it afresh.
-   */
-  crystal: { rx: 17, ry: 13, time: 25, blink: 3 },
   sight: { range: 230, hear: 64, memory: 5, ambush: 12 },
   /**
    * How lit a room is (`render/caveSight.ts`, `roomLevel`): level L from 0 (pitch black, the dark's `black` alpha) to 1
