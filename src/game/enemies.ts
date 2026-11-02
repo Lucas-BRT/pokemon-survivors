@@ -13,7 +13,8 @@ import { isSpitter, spitBand, spitterStride } from './spitters'
 import { CONFUSE_BUMP, CONFUSE_CONTACT, createStatus, isFrozen, statusAttack, statusPace } from './status'
 import { enemyGroundPace } from './terrain'
 import { createTraitState, isAirborne, traitPace } from './traits'
-import { dormant, dungeonNav, spaceAt } from './dungeon'
+import { dormant, spaceAt } from './dungeon'
+import { dungeonNav, floorFeet } from './dungeonGraph'
 import { CAVE } from '../data/places'
 import { PROCGEN } from '../data/procgen'
 import { evict, mazeWaypoint } from './mazeNav'
@@ -171,8 +172,10 @@ export const updateEnemies = (g: Game, dt: number) => {
   let navs: typeof caveNavs | null = null
   if (cave && plan) {
     navs = caveNavs
+    // The rocks and crystals on the floor: the walkers go round them (`dungeonGraph.ts`).
+    const feet = floorFeet(cave.terrain.solids, cave.x, cave.y)
     navs.length = g.players.length
-    for (let i = 0; i < g.players.length; i++) navs[i] = dungeonNav(plan, g.players[i]!.x - cave.x, g.players[i]!.y - cave.y)
+    for (let i = 0; i < g.players.length; i++) navs[i] = dungeonNav(plan, g.players[i]!.x - cave.x, g.players[i]!.y - cave.y, feet)
   }
   const band = spitBand(g.view)
   // Knockback fades the same for everyone this tick.

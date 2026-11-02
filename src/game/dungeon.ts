@@ -9,8 +9,9 @@ import { caveLevel, type CaveLevel } from '../data/caveLevels'
  * Mystery Dungeon floors (the cave, `cave.ts`): rooms on a grid joined by
  * corridors, a start, stairs in the room farthest from it, items and scenery.
  * Pure: the same rng gives the same floor, and coordinates are px around the
- * floor's center. `dungeonNav` steers walkers through the corridors toward
- * the player, since they'd otherwise press against the wall nearest to them.
+ * floor's center. The walkers' way through it (a graph of waypoints and a
+ * shortest path to the player, round rocks and out by the doors) is
+ * `dungeonGraph.ts`; rocks and crystals keep clear of the doors for it.
  */
 
 /** A room or a corridor stretch: its top-left corner and size. */
@@ -63,6 +64,12 @@ export const DUNGEON = {
  * wall, so the door never sits flush with the room's corner (the corridor's side would run on as the room's own wall,
  * and the outline would step into an L), nor poke past it.
  */
+/**
+ * Least distance between two rocks (and a rock and any other thing on the floor): wider than their grown feet touch (`MARGIN` in
+ * `dungeonGraph.ts`) plus a body, so the gap between two rocks is either shut or one a walker fits through, never a needle.
+ */
+const ROCK_SPACING = 52
+
 const DOOR_INSET = DUNGEON.corridor / 2 + 14
 
 const center = (r: Rect): Pt => [dm.round(r.x + r.w / 2), dm.round(r.y + r.h / 2)]
@@ -125,6 +132,18 @@ const corridorBetween = (rooms: readonly Rect[], a: number, b: number, pa: Pt, p
       })()
   return { a, b, path, rects: path.slice(1).map((p, i) => stretch(path[i]!, p, DUNGEON.corridor)) }
 }
+
+/** Where a corridor leaves `room`: the point of its axis `inset` px inside the wall it goes out by (`from` is its path's first point in the room, `toward` the next). */
+export const doorOf = (room: Rect, from: Pt, toward: Pt, inset: number): Pt => {
+  const across = toward[0] !== from[0]
+  const sign = Math.sign(across ? toward[0] - from[0] : toward[1] - from[1])
+  const wall = across ? (sign > 0 ? room.x + room.w : room.x) : sign > 0 ? room.y + room.h : room.y
+  const inward = wall - sign * inset
+  return across ? [inward, from[1]] : [from[0], inward]
+}
+
+/** Which wall of its room a corridor leaves by, as an index into left, right, top, bottom (`from` is its first point in the room, `toward` the next). */
+const wallOf = (from: Pt, toward: Pt) => (toward[0] !== from[0] ? (toward[0] > from[0] ? 1 : 0) : toward[1] > from[1] ? 3 : 2)
 
 /** Shortest number of corridors from every room to the nearest of `goals`. */
 export const roomDistances = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, goals: readonly number[], out: number[] = []) => {
@@ -202,11 +221,11 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
   const stairs = spotIn(rng, rooms[stairsRoom]!, 24)
 
   const taken: Pt[] = [start, stairs]
-  const scatter = (count: number, pool: readonly number[], spacing: number, spot: (r: Rect) => Pt) => {
+  const scatter = (count: number, pool: readonly number[], spacing: number, spot: (r: Rect) => Pt, allowed: (p: Pt) => boolean = () => true) => {
     const out: Pt[] = []
     for (let i = 0; i < count * 6 && out.length < count; i++) {
       const p = spot(rooms[pool[Math.floor(rng() * pool.length)]!]!)
-      if (taken.some((t) => far2(t, p) < spacing * spacing)) continue
+      if (!allowed(p) || taken.some((t) => far2(t, p) < spacing * spacing)) continue
       out.push(p)
       taken.push(p)
     }
@@ -228,7 +247,7 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
  * the end of a single corridor: no loop ever reaches it, so there is one way
  * in. Some of the big rooms are set aside as ambushes with prizes. Pure: the
  * same rng gives the same floor. Same shape as `generateFloor`, so the
- * walkers' steering (`dungeonNav`) and the art work as they are.
+ * walkers' graph (`dungeonGraph.ts`) and the art work as they are.
  */
 export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLevel(1)): DungeonFloor => {
   const k = Math.min(index, CAVE_GEN.grids.length - 1)
@@ -415,11 +434,11 @@ export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLev
   const prizes = ambush.flatMap((i) => Array.from({ length: 1 + (sizes[i]! >= 4 ? 1 : 0) + (sizes[i]! >= 6 ? 1 : 0) }, (): Pt => spotIn(rng, rooms[i]!, 26)))
 
   const taken: Pt[] = [start, stairs, ...prizes]
-  const scatter = (count: number, pool: readonly number[], spacing: number, spot: (r: Rect) => Pt) => {
+  const scatter = (count: number, pool: readonly number[], spacing: number, spot: (r: Rect) => Pt, allowed: (p: Pt) => boolean = () => true) => {
     const out: Pt[] = []
     for (let i = 0; i < count * 6 && out.length < count; i++) {
       const p = spot(rooms[pool[Math.floor(rng() * pool.length)]!]!)
-      if (taken.some((t) => far2(t, p) < spacing * spacing)) continue
+      if (!allowed(p) || taken.some((t) => far2(t, p) < spacing * spacing)) continue
       out.push(p)
       taken.push(p)
     }
@@ -432,13 +451,31 @@ export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLev
   const others = all.filter((i) => i !== startRoom && i !== sanctuary)
   const plain = others.filter((i) => !ambush.includes(i))
   const items = scatter(CAVE_GEN.items[k]! + lv.items, plain.length > 0 ? plain : others, 40, (r) => spotIn(rng, r, 18))
-  const sources = scatter(Math.max(3, Math.ceil((rooms.length / 4) * lv.sources)), all.filter((i) => i !== sanctuary), 50, (r) => cornerIn(rng, r))
+  // A crystal never stands on a corridor's axis near its door: a body would not fit by (the walkers' graph, `dungeonGraph.ts`, counts on it).
+  const mouths = links.flatMap((l) => {
+    const n = l.path.length
+    return [{ room: l.a, from: l.path[0]!, toward: l.path[1]! }, { room: l.b, from: l.path[n - 1]!, toward: l.path[n - 2]! }].map(({ room, from, toward }) => {
+      const across = toward[0] !== from[0]
+      return { wall: doorOf(rooms[room]!, from, toward, 0), across, sign: Math.sign(across ? toward[0] - from[0] : toward[1] - from[1]) }
+    })
+  })
+  /** Whether (x, y) is off every door's axis: more than 18 px to its side, or not within the stretch 55 px inside the wall to 35 px out. */
+  const offDoors = ([x, y]: Pt) =>
+    mouths.every((m) => {
+      const along = (m.across ? x - m.wall[0] : y - m.wall[1]) * m.sign
+      return Math.abs(m.across ? y - m.wall[1] : x - m.wall[0]) > 18 || along < -55 || along > 35
+    })
+  const sources = scatter(Math.max(3, Math.ceil((rooms.length / 4) * lv.sources)), all.filter((i) => i !== sanctuary), 50, (r) => cornerIn(rng, r), offDoors)
   if (sanctuary >= 0) {
     // Ringed by light sources, the middle left for the dweller: the four corners and the middle of the two sides.
     const r = rooms[sanctuary]!
     const [cx, cy] = center(r)
     const [l, rt, t, b] = [r.x + 14, r.x + r.w - 14, r.y + 14, r.y + r.h - 12]
-    sources.push([l, t], [rt, t], [l, b], [rt, b], [r.x + 12, cy])
+    // The fifth stands at the middle of a wall no corridor leaves by: on a corridor's axis it would shut the door.
+    const used = new Set(links.flatMap((k) => (k.a === sanctuary || k.b === sanctuary ? [wallOf(k.a === sanctuary ? k.path[0]! : k.path[k.path.length - 1]!, k.a === sanctuary ? k.path[1]! : k.path[k.path.length - 2]!)] : [])))
+    const mids: readonly Pt[] = [[r.x + 12, cy], [r.x + r.w - 12, cy], [cx, r.y + 12], [cx, r.y + r.h - 8]]
+    const mid = mids.find((_, side) => !used.has(side))
+    sources.push([l, t], [rt, t], [l, b], [rt, b], ...(mid ? [mid] : []))
     taken.push([cx, cy])
   }
   // A light source on the wall side of the long straight corridors, to light the way between rooms (the middle stays clear for walking).
@@ -462,8 +499,13 @@ export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLev
   }
   // Hidden traps in the regular rooms and the ones ambush packs spare, never the start's, the stairs' or the Cristalário's.
   const traps = scatter(lv.traps, plain.length > 0 ? plain : others, 56, (r) => spotIn(rng, r, 30))
+  // Rocks keep clear of every corridor's door: one on its axis would shut the way for anything wider than a few px.
+  for (const l of links) {
+    const n = l.path.length
+    taken.push(doorOf(rooms[l.a]!, l.path[0]!, l.path[1]!, 28), doorOf(rooms[l.b]!, l.path[n - 1]!, l.path[n - 2]!, 28))
+  }
   const cover = rooms.length + sizes.reduce((a, s) => a + (s - 1), 0)
-  const rocks = scatter(cover, others, 36, (r) => spotIn(rng, r, 26))
+  const rocks = scatter(cover, others, ROCK_SPACING, (r) => spotIn(rng, r, 26))
   void dist
   return { rooms, links, start, stairs, startRoom, stairsRoom, items, sources, rocks, ambush, prizes, sizes, sanctuary, traps }
 }
@@ -504,60 +546,6 @@ export const clearShot = (floor: Pick<DungeonFloor, 'rooms' | 'links'>, ax: numb
 
 /** Index of the room holding (x, y), or -1. */
 export const roomAt = (floor: Pick<DungeonFloor, 'rooms'>, x: number, y: number) => floor.rooms.findIndex((r) => inRect(r, x, y))
-
-/** The corridor holding (x, y) and which of its stretches, or null. */
-const linkAt = (floor: Pick<DungeonFloor, 'links'>, x: number, y: number) => {
-  for (const link of floor.links) {
-    const i = link.rects.findIndex((r) => inRect(r, x, y))
-    if (i >= 0) return { link, i }
-  }
-  return null
-}
-
-/** Rooms the player counts as being in: theirs, or both ends of the corridor they walk. */
-const playerRooms = (floor: DungeonFloor, x: number, y: number): readonly number[] => {
-  const r = roomAt(floor, x, y)
-  if (r >= 0) return [r]
-  const at = linkAt(floor, x, y)
-  return at ? [at.link.a, at.link.b] : []
-}
-
-/**
- * Steering through a dungeon floor for walkers chasing the player at (px, py),
- * all in floor px. The returned function writes where a walker at (x, y)
- * should head into `out` and returns true, or returns false when it can go
- * straight for the player (same room, or nowhere known).
- */
-export const dungeonNav = (floor: DungeonFloor, px: number, py: number) => {
-  const goals = playerRooms(floor, px, py)
-  if (goals.length === 0) return null
-  const dist = roomDistances(floor, goals)
-  return (x: number, y: number, out: { x: number; y: number }) => {
-    const r = roomAt(floor, x, y)
-    if (r >= 0) {
-      if (dist[r] === 0) return false
-      const link = floor.links.find((l) => (l.a === r || l.b === r) && dist[l.a === r ? l.b : l.a] === dist[r]! - 1)
-      if (!link) return false
-      // Out of the room along the corridor: its first bend from this side.
-      const [tx, ty] = link.a === r ? link.path[1]! : link.path[link.path.length - 2]!
-      out.x = tx
-      out.y = ty
-      return true
-    }
-    const at = linkAt(floor, x, y)
-    if (!at) return false
-    const { link, i } = at
-    if (dist[link.a] === 0 && dist[link.b] === 0) return false
-    const forward = dist[link.b]! <= dist[link.a]!
-    // Stretch i runs from path[i] to path[i + 1]; head for its far end, or the next one once there.
-    let k = forward ? i + 1 : i
-    const [kx, ky] = link.path[k]!
-    if (Math.abs(kx - x) + Math.abs(ky - y) < 6) k = forward ? Math.min(link.path.length - 1, k + 1) : Math.max(0, k - 1)
-    out.x = link.path[k]![0]
-    out.y = link.path[k]![1]
-    return true
-  }
-}
 
 /**
  * A corridor's mouth, in px: a funnel reaching `into` the room and `out` along
