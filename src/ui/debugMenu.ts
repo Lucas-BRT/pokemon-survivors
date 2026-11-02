@@ -19,7 +19,7 @@ import { placeTeam } from '../game/players'
 import { setWeather } from '../game/weather'
 import type { Game } from '../game/types'
 import { LIT_DEFAULTS, lit, retune, roomLevel, type Lit } from '../render/caveSight'
-import { DEBUG_VIEW } from '../render/debugOverlay'
+import { DEBUG_VIEW, setView, VIEW_GROUPS } from '../render/debugOverlay'
 import { copyText, renderData } from './debugData'
 import { h } from './dom'
 
@@ -494,7 +494,7 @@ const gameTab: Tab = {
     {
       t: 'buttons',
       items: [
-        { label: 'Reset knobs', run: () => { resetTune(); Object.assign(lit, LIT_DEFAULTS); retune(); Object.assign(DEBUG_VIEW, { hitboxes: false, rooms: false, levels: false, maze: false, counters: false }); MAZE_DEBUG.theme = ''; holds.god = holds.freeze = holds.wind = false; holds.tension = -1; if (g) recomputeStats(g) } },
+        { label: 'Reset knobs', run: () => { resetTune(); Object.assign(lit, LIT_DEFAULTS); retune(); setView(); MAZE_DEBUG.theme = ''; holds.god = holds.freeze = holds.wind = false; holds.tension = -1; if (g) recomputeStats(g) } },
         { label: 'Copy state', run: () => { const text = JSON.stringify({ tune: DEBUG_TUNE, stats: DEBUG_STATS, lit, view: DEBUG_VIEW, cave: caveLevelPick }, null, 2); console.log(text); copyText(text); return 'Copied (and in the console).' } },
       ],
     },
@@ -507,12 +507,20 @@ const viewTab: Tab = {
   id: 'view',
   label: 'View',
   controls: () => [
-    { t: 'info', text: () => 'Layers drawn over the world (dev only).' },
-    { t: 'toggle', label: 'Hitboxes (foes, player, moves, hazards)', get: () => DEBUG_VIEW.hitboxes, set: (on) => (DEBUG_VIEW.hitboxes = on) },
-    { t: 'toggle', label: 'Cave rooms and corridors', get: () => DEBUG_VIEW.rooms, set: (on) => (DEBUG_VIEW.rooms = on) },
-    { t: 'toggle', label: 'Light level of each room', get: () => DEBUG_VIEW.levels, set: (on) => (DEBUG_VIEW.levels = on) },
-    { t: 'toggle', label: 'Maze cells (steps from you)', get: () => DEBUG_VIEW.maze, set: (on) => (DEBUG_VIEW.maze = on) },
-    { t: 'toggle', label: 'Run counters', get: () => DEBUG_VIEW.counters, set: (on) => (DEBUG_VIEW.counters = on) },
+    { t: 'info', text: () => `Layers drawn over the world (dev only). On: ${Object.values(DEBUG_VIEW).filter(Boolean).length}` },
+    {
+      t: 'buttons',
+      items: [
+        { label: 'All off', run: () => setView() },
+        { label: 'Cave preset', run: () => setView(['rooms', 'levels', 'caveRadii', 'hitboxes', 'counters']) },
+        { label: 'Maze preset', run: () => setView(['maze', 'wings', 'mazeContents', 'mazeRadii', 'counters']) },
+        { label: 'Spawn preset', run: () => setView(['labels', 'spawnRing', 'darkSpawn', 'mazeSpawn', 'targets', 'counters']) },
+      ],
+    },
+    ...VIEW_GROUPS.flatMap((grp): Ctl[] => [
+      { t: 'title', label: grp.group },
+      ...grp.items.map((it): Ctl => ({ t: 'toggle', label: it.label, get: () => DEBUG_VIEW[it.key], set: (on) => (DEBUG_VIEW[it.key] = on) })),
+    ]),
   ],
 }
 
@@ -533,7 +541,7 @@ const STYLE =
 const folded = new Set<string>()
 
 /** Redraws a tab's controls into `body`; each title opens a collapsible group holding the controls up to the next title. `say` shows a line at the bottom. */
-const draw = (body: HTMLElement, tab: Tab, g: Game | undefined, say: (text: string) => void) => {
+const draw = (body: HTMLElement, tab: Tab, g: Game | undefined, say: (text: string) => void, refresh: () => void) => {
   body.replaceChildren()
   let into: HTMLElement = body
   for (const c of tab.controls(g)) {
@@ -595,7 +603,8 @@ const draw = (body: HTMLElement, tab: Tab, g: Game | undefined, say: (text: stri
               const b = h('button', { type: 'button' }, item.label)
               b.addEventListener('click', () => {
                 say(item.run() ?? 'Done.')
-                infos.forEach((f) => f())
+                // The controls show the state again (a preset turned layers on, "Reset knobs" put sliders back).
+                refresh()
               })
               return b
             }),
@@ -623,7 +632,7 @@ export const toggleDebugMenu = (game: () => Game | undefined) => {
     current = id
     infos = []
     for (const b of tabs.children) b.classList.toggle('on', (b as HTMLElement).dataset.id === id)
-    draw(body, TABS.find((t) => t.id === id) ?? TABS[0]!, game(), (text) => (status.textContent = text))
+    draw(body, TABS.find((t) => t.id === id) ?? TABS[0]!, game(), (text) => (status.textContent = text), () => show(current))
   }
   for (const t of TABS) {
     const b = h('button', { type: 'button', 'data-id': t.id }, t.label)
