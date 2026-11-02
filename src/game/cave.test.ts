@@ -291,5 +291,6 @@ describe.skipIf(!PROCGEN.cave)('the cave’s walkers on a floor with rocks', () 
       }
       closest.forEach((d, k) => expect(d, `seed ${seed} walker ${k}`).toBeLessThan(40))
     }
-  })
+    // About a second alone, several when the whole suite runs at once: more than vitest's default 5 s.
+  }, 60_000)
 })
