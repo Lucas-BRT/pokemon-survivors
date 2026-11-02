@@ -143,7 +143,7 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
   s.lights.forEach(([lx, ly], i) => {
     const x = inside.x + lx
     const y = inside.y + ly - 6
-    // A crystal shows its full light only while it shines (touched, as the Nightmare's lanterns are); otherwise a dull glint, found from afar and fading with the distance (no pop in and out).
+    // A crystal shows its full light only while it shines (touched, as the Nightmare's lanterns are); otherwise a dull glint, but only in a room already entered, and the same all over it (`glintOf`).
     const shining = s.touched.find((c) => c.i === i)
     if (lit.allOn || shining) {
       // Eases in over its first moments and blinks in its last seconds before going out.
@@ -153,7 +153,8 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
       litBy.push([x, y, lit.auraFoot])
       return
     }
-    if (!lit.glint) return
+    // A crystal in a room nobody has entered gives no light at all: that room is dark to the team (`glows`, as for the stairs and the chest).
+    if (!lit.glint || !glows(inside.x + lx, inside.y + ly)) return
     // A dull crystal glints the same all over its room and fades only once the players are out of it (`glintOf`).
     const glint = lit.glintGain * glintOf(plan, [lx, ly], team)
     if (glint > 0.02) points.push({ x, y, r: lit.glintR, i: glint })

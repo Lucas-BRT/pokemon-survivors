@@ -127,7 +127,7 @@ export const roomLevels = (plan: DungeonFloor, touched: readonly number[]): read
 /**
  * How strongly a crystal that isn't shining glints (0..1, before `glintGain`): constant while a player is in its room, wherever in it
  * they stand, and fading only once they are out of it, by their distance to its walls (`glintNear` px of grace, then `glintFade` px
- * to nothing). A crystal in a corridor has no room: the distance is to the crystal itself. In the treasure chamber (`plan` null) the
+ * to nothing); `caveDark` shows it only for rooms already entered. A crystal in a corridor has no room: the distance is to the crystal itself. In the treasure chamber (`plan` null) the
  * whole cavern is one room. `players` and the crystal (`at`) are in the floor's own px.
  */
 export const glintOf = (plan: DungeonFloor | null, at: readonly [number, number], players: ReadonlyArray<{ x: number; y: number }>, n: Pick<Lit, 'glintNear' | 'glintFade'> = lit) => {
