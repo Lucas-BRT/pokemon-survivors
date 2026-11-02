@@ -62,7 +62,7 @@ import { bolt, dashedRing } from './strokes'
 import { dropFog, drawWeather, warmFog, type FogMode } from './weather'
 import { drawHauntedNight, drawTreat } from './halloweenArt'
 import { drawMazeGround } from './mazeArt'
-import { drawMazeFog, mazeSees } from './mazeSight'
+import { mazeSees, rememberMazes } from './mazeSight'
 import { drawSolid, drawTerrainGround, drawWading, keepTerrain, solidCovers, solidsInView, warmTerrain } from './terrain'
 import { drawGround, GROUND_LOOKAHEAD, warmGround } from './world'
 import { damageBudget, showsText, textAlpha, type DamageNumbers } from './damageNumbers'
@@ -1205,7 +1205,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   if (g.halloween && !g.rift.arena && !g.place.inside) drawHauntedNight(ctx, g, camX, camY, t)
   // The cave's dark and the graveyard's night, then the weather, over the world but under damage numbers.
   drawPlaceDark(ctx, g, camX, camY, t)
-  drawMazeFog(ctx, g, camX, camY)
+  rememberMazes(g)
   drawNightmareDark(ctx, g, camX, camY, t)
   drawTunnelDark(ctx, g, camX, camY)
   drawWeather(ctx, g, camX, camY, t, opts.fog)

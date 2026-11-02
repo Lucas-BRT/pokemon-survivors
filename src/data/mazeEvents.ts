@@ -80,11 +80,7 @@ export const GRAND = {
   /** Side (cells) of a hall, and of the clearing left in the garden. */
   roomSize: 3,
   entrances: [4, 5],
-  /** How many corridor steps the light of a player reaches, and the share of it each step keeps (a stepped, pixel-dithered fall-off). */
-  reach: 5,
-  falloff: [1, 0.94, 0.78, 0.58, 0.36, 0.16],
-  /** How much of a lit cell's light leaks over a hedge into the cell beyond it (0..1), so the shade fades across the hedge instead of cutting at it. */
-  leak: 0.4,
-  /** What a cell the player has seen keeps of the light (0..1): a faint memory. */
-  memory: 0.2,
+  /** How far (px) a player sees a chest, a key or a Pokémon down a straight corridor, and how many corridor steps around them the minimap remembers. */
+  sight: 360,
+  reach: 3,
 } as const
