@@ -2300,23 +2300,23 @@ export const en: Messages = {
   },
 
   landmarks: {
-    names: { cottage: 'Abandoned Cottage', tunnel: 'Mine Tunnel', maze: 'Hedge Maze', ruins: 'Unown Ruins', camp: 'Abandoned Camp' },
+    names: { cottage: 'Abandoned Cottage', tunnel: 'Mine Tunnel', ruins: 'Unown Ruins', camp: 'Abandoned Camp' },
     hints: {
       cottage: 'Someone left a crate inside…',
       tunnel: 'Go in one mouth, come out the other.',
-      maze: 'A chest waits at the heart of the maze. Something guards it.',
       ruins: 'The altar waits in silence.',
       camp: 'A backpack left behind by the fire.',
     },
     loot: {
       cottage: 'You rummaged through the old crate!',
-      maze: 'You reached the heart of the maze!',
       ruins: 'The Unown glyphs light up!',
       camp: 'You opened the forgotten backpack!',
     },
     tunnelOut: 'You came out the other side of the tunnel!',
     /** What happens in the hedge maze (`game/mazeRun.ts`). */
     maze: {
+      name: 'Hedge Maze',
+      hint: 'A chest waits at the heart of the maze. Something guards it.',
       key: (n: number, of: number) => `Key ${n}/${of}!`,
       locked: (left: number) => (left === 1 ? 'The chest is locked: *1 key* to go.' : `The chest is locked: *${left} keys* to go.`),
       cache: 'A chest hidden in a dead end!',
@@ -2325,6 +2325,8 @@ export const en: Messages = {
       guard: 'The maze’s guardian woke up!',
       ring: 'The ring carried you to the other side!',
       thief: 'A thief came after the key!',
+      heart: 'You opened the chest at the heart of the maze!',
+      trap: 'A trap!',
     },
   },
   places: {

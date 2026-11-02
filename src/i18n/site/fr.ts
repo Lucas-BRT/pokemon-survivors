@@ -547,17 +547,17 @@ export const siteFr: SiteMessages = {
     landmarks: {
       paragraphs: (p) => [
         `La carte a des points de repère, placés à partir de la graine de la partie comme les montagnes et les lacs : au plus un par zone de ${p.block}×${p.block} (${p.odds}% d’entre elles en ont un), toujours habillés pour le biome de la partie. Quand tu t’approches, un panneau en bois affiche son nom dans le coin de l’écran.`,
-        `Quatre d’entre eux gardent un trésor : reste à côté pendant ${p.open}s pour l’ouvrir. Chacun s’ouvre une fois par partie, et un reflet marque ceux encore fermés. Le tunnel n’a pas de trésor, mais c’est un raccourci : reste dans l’une de ses entrées pendant ${p.tunnel}s et tu ressors par l’autre, de l’autre côté de la crête, pendant que la horde perd ta trace.`,
+        `Trois d’entre eux gardent un trésor : reste à côté pendant ${p.open}s pour l’ouvrir. Chacun s’ouvre une fois par partie, et un reflet marque ceux encore fermés. Le tunnel n’a pas de trésor, mais c’est un raccourci : reste dans l’une de ses entrées pendant ${p.tunnel}s et tu ressors par l’autre, de l’autre côté de la crête, pendant que la horde perd ta trace.`,
         `Entre eux, des buissons, des troncs tombés, des rochers et des arbres isolés. Tout cela bloque ceux qui marchent (la horde aussi), mais les Pokémon volants, les spectres et les boss passent par-dessus.`,
+        `À part, le Labyrinthe de haies est immense (plus grand que l’écran), avec plusieurs entrées, de larges couloirs et des haies plus hautes que toi : on ne voit que ce qui est en ligne droite. Il cache des coffres (pas tous vrais), des pièges invisibles, des clés, des anneaux de téléportation et des Pokémon dans les haies, et le coffre du cœur réveille un gardien. La horde n’y entre pas, et chaque biome change les règles du sol et de la lumière.`,
       ],
-      names: { cottage: 'Maisonnette abandonnée', tunnel: 'Tunnel de mine', maze: 'Labyrinthe de haies', ruins: 'Ruines Zarbi', camp: 'Campement abandonné' },
+      names: { cottage: 'Maisonnette abandonnée', tunnel: 'Tunnel de mine', ruins: 'Ruines Zarbi', camp: 'Campement abandonné' },
       placeHead: 'Point de repère',
       whatHead: 'Ce qu’on y trouve',
       lootHead: 'Trésor',
       what: {
         cottage: 'Une maisonnette en pierre sans toit : entre par la porte. Des fenêtres, une cheminée, un vieux lit et une caisse dans le coin, et un puits dans la cour.',
         tunnel: 'Une longue crête avec une entrée de mine à chaque bout, des rails et un wagonnet de minerai.',
-        maze: 'De hautes haies avec un seul chemin jusqu’au coffre au centre. Les marcheurs se perdent dans les impasses ; toi, pas forcément.',
         ruins: 'Des pierres dressées gravées de glyphes Zarbi en cercle, un autel au milieu et des colonnes tombées.',
         camp: 'Une tente, des rondins autour d’un feu qui brûle encore et un sac à dos oublié.',
       },

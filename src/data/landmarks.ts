@@ -1,5 +1,4 @@
 import type { DropSource } from './consumables'
-import { PROCGEN } from './procgen'
 
 /**
  * Landmarks: the map's points of interest. Each stands in a terrain cell the
@@ -11,7 +10,7 @@ import { PROCGEN } from './procgen'
  * `game/landmarkLayout.ts`, the rules in `game/landmarks.ts` and the art in
  * `render/landmarkPieces.ts`. Names and lines live in `i18n` (`landmarks`).
  */
-export const LANDMARK_IDS = ['cottage', 'tunnel', 'maze', 'ruins', 'camp'] as const
+export const LANDMARK_IDS = ['cottage', 'tunnel', 'ruins', 'camp'] as const
 
 export type LandmarkId = (typeof LANDMARK_IDS)[number]
 
@@ -20,8 +19,8 @@ export const LANDMARK = {
   block: 3,
   /** Odds a block holds one. */
   odds: 0.8,
-  /** Relative odds of each landmark. */
-  weights: { cottage: 3, tunnel: 2, maze: 2, ruins: 2, camp: 3 } satisfies Record<LandmarkId, number>,
+  /** Relative odds of each landmark (the hedge maze is a site of its own, `game/grandMaze.ts`). */
+  weights: { cottage: 3, tunnel: 2, ruins: 2, camp: 3 } satisfies Record<LandmarkId, number>,
   /** Standing this close to a treasure for `openTime` seconds opens it. */
   treasureRadius: 20,
   openTime: 0.6,
@@ -46,8 +45,6 @@ export type LandmarkLoot = { coins: number; drops: readonly DropSource[]; berrie
 export const LANDMARK_LOOT = {
   /** An old crate in the cottage's corner. */
   cottage: { coins: 2, drops: ['itemBall'] },
-  /** The chest at the heart of the maze: the long way in pays more. */
-  maze: { coins: 5, drops: ['itemBall', 'itemBall'], egg: true },
   /** The ruins' altar: the Unown's glyphs light up and spill Exp. Candy. */
   ruins: { coins: 1, drops: [], xp: 0.6 },
   /** A backpack someone left by the fire. */
@@ -65,23 +62,9 @@ export type TreasureLandmark = keyof typeof LANDMARK_LOOT
 export type LandmarkPiece =
   | 'wallN' | 'wallW' | 'wallE' | 'wallS' | 'well' | 'fence' | 'crate' | 'table' | 'bed'
   | 'ridge' | 'cart'
-  | 'hedge' | 'chest'
+  | 'chest' | 'mazeWall'
   | 'menhir' | 'altar' | 'column'
   | 'tent' | 'campfire' | 'log' | 'pack'
 
 /** Flat art under a landmark (floors, paths, a plaza), drawn with the ground like a lake. */
-export type LandmarkGround = 'floor' | 'rails' | 'gravel' | 'plaza' | 'camp'
-
-/** The hedge maze: `size`×`size` corridors of `cell` px, entered from the middle of its south side, the chest at its heart. */
-export const MAZE = {
-  size: 5,
-  cell: 32,
-  /** Half the thickness of a hedge (px). */
-  wall: 5,
-  /** Distinct mazes: each run's mazes come from these, so their art is built once. */
-  patterns: 6,
-} as const
-
-/** The maze's cells per side and how many distinct mazes a run picks from: the generated ones (`data/procgen.ts`) or the six fixed patterns. */
-export const MAZE_DIM = PROCGEN.maze ? PROCGEN.mazeSize : MAZE.size
-export const MAZE_COUNT = PROCGEN.maze ? PROCGEN.mazePatterns : MAZE.patterns
+export type LandmarkGround = 'floor' | 'rails' | 'plaza' | 'camp'

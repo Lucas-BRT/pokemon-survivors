@@ -1,4 +1,4 @@
-import { canvasCache, context2d, createCanvas, dropKept, drawPacked, ellipse, keepPacked, lazy, onCanvasReset, type Packed, type PixelSprite } from '../engine/pixelart'
+import { blitEllipse, canvasCache, context2d, createCanvas, dropKept, drawPacked, ellipse, keepPacked, lazy, onCanvasReset, type Packed, type PixelSprite } from '../engine/pixelart'
 import { BIOMES, type BiomeId } from '../data/biomes'
 import { CLIFF_CRESTS, CLIFFS, LAKES, TERRAIN as RULES, type SolidKind, type Tier } from '../data/terrain'
 import { featuresNear, groundAt, type Solid } from '../game/terrain'
@@ -941,10 +941,16 @@ const mountainShadows = CLIFFS.map((tiers) => lazy(() => footShadow(tiers[0]!.fo
 
 const blit = (ctx: CanvasRenderingContext2D, p: KeptPiece, x: number, y: number) => drawPacked(ctx, p.packed, Math.round(x - p.ax), Math.round(y - p.ay))
 
+/** A landmark's chest as the maze's heart and every small chest wear it: the same sprite and shadow, so no chest tells what it is from another. */
+export const drawChest = (ctx: CanvasRenderingContext2D, biome: BiomeId, x: number, y: number, open: boolean) => {
+  blitEllipse(ctx, LANDMARK_SHADOW.chest, Math.max(2, Math.round(LANDMARK_SHADOW.chest * 0.4)), 'rgba(16,24,16,0.28)', x, y)
+  blit(ctx, pieceOf(biome, 'chest', 0, open), x, y)
+}
+
 /** The solids around the view, for the depth sort with the Pokémon. */
 export const solidsInView = (g: Game, camX: number, camY: number, w: number, h: number, out: { push: (s: Solid) => unknown }) => {
   // Generous margins: towers and mountains reach far above their footprint.
-  for (const f of featuresNear(g, camX + w / 2, camY + h / 2 + 60, w / 2 + 90, h / 2 + 150)) for (const s of f.solids) out.push(s)
+  for (const f of featuresNear(g, camX + w / 2, camY + h / 2 + 60, w / 2 + 90, h / 2 + 150)) for (const s of f.solids) if (s.kind !== 'mazeWall') out.push(s)
 }
 
 /* ---------------- Skirts ---------------- */

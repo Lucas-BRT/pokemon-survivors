@@ -1,3 +1,4 @@
+import { cellCenter, nearestMaze } from './grandMaze'
 import { BIOMES, type BiomeId } from '../data/biomes'
 import { setBiome } from './biomes'
 import { PLACE_IDS, type PlaceId } from '../data/places'
@@ -15,10 +16,10 @@ import type { Game } from './types'
  * `?debug=cave` starts inside the cave; `&floor=2` takes its stairs that many
  * times, `&mon=charmander` picks the Pokémon, `&coins=5000` and `&gems=6` fill the run's ₽ and gems, and
  * `&shop=sableyeShiny` (a `CAVE_NPCS` id) puts that dweller in the floor's Cristalário and the team beside it.
- * `?debug=maze` walks the run to the nearest hedge maze (`&biome=snow` first sets its biome). A bare `?debug` just starts a run. Never ranked:
+ * `?debug=maze` walks the run to the nearest hedge maze's first way in (`&biome=snow` first sets its biome, `&in` stands inside it). A bare `?debug` just starts a run. Never ranked:
  * the shell skips the debug runs' banking, and this only runs in dev.
  */
-export type DebugStart = { place: PlaceId | null; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; biome: BiomeId | null }
+export type DebugStart = { place: PlaceId | null; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; inside: boolean; biome: BiomeId | null }
 
 /** The light lab (`&lab=S:C:D`): one room of S times the reference area, C crystals inside it, D in its door tile. */
 export type Lab = { size: number; inside: number; doors: number; vertical: 0 | 1 | 2 }
@@ -90,6 +91,7 @@ export const parseDebug = (search: string): DebugStart | null => {
     gems: num('gems'),
     lab: parseLab(q.get('lab')),
     maze: place === 'maze',
+    inside: q.has('in'),
     biome: (Object.keys(BIOMES) as BiomeId[]).find((id) => id === q.get('biome')) ?? null,
     shop: (Object.keys(CAVE_NPCS) as CaveNpcId[]).find((id) => id === q.get('shop')) ?? null,
   }
@@ -101,6 +103,16 @@ export const applyDebug = (g: Game, input: DebugStart) => {
   if (spec.biome) setBiome(g, spec.biome)
   if (spec.lab) spec = { ...spec, floor: Math.max(1, spec.floor) }
   g.coins += spec.coins
+  // `?debug=maze`: just outside the nearest big hedge maze's first way in.
+  if (spec.maze) {
+    const site = nearestMaze(g.terrain.seed, g.player.x, g.player.y)
+    const e = site?.entrances[0]
+    if (site && e) {
+      const c = cellCenter(site, e.c, e.r)
+      const out = spec.inside ? -64 : 70
+      placeTeam(g, e.side === 3 ? site.x - out : e.side === 1 ? site.x + site.side + out : c.x, e.side === 0 ? site.y - out : e.side === 2 ? site.y + site.side + out : c.y)
+    }
+  }
   g.player.gems += spec.gems
   if (spec.place) enterPlace(g, spec.place, Math.round(g.player.x), Math.round(g.player.y))
   // The lab's floor replaces the next one drawn: B2F with a room of the asked size.

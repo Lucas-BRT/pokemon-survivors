@@ -265,6 +265,8 @@ export type Enemy = {
   x: number
   y: number
   /** Seconds left it keeps hunting a player it saw or was hit by (a cave's walkers only see what's near, `CAVE.sight`); 0 unaware. */
+  /** The big hedge maze (`MazeSite.key`) this Pokémon belongs to: it stays in, and the horde stays out (`mazeRun.ts`). */
+  home?: number
   alert: number
   /** Knockback velocity, decays every tick. */
   kx: number

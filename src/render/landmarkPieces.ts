@@ -1,7 +1,8 @@
+import { createCanvas } from '../engine/pixelart'
 import type { BiomeId } from '../data/biomes'
-import { MAZE, MAZE_COUNT, MAZE_DIM, type LandmarkGround, type LandmarkPiece } from '../data/landmarks'
+import { type LandmarkGround, type LandmarkPiece } from '../data/landmarks'
 import type { Ellipse } from '../data/terrain'
-import { COTTAGE, hedgeRow, MAZE_LAYOUTS, RIDGE, RUINS } from '../game/landmarkLayout'
+import { COTTAGE, RIDGE, RUINS } from '../game/landmarkLayout'
 import { mineArch, over, PLACE_PIECES } from './placePieces'
 import { cylinder, grid, lambert, limb, noise, outline, put, sculpt, shade, stamp, toSprite, wobble, type Blob, type Grid, type Ramp } from './sculpt'
 import { brokenPillar, mountainOf, ROCK_SKINS, type Piece } from './terrain'
@@ -408,41 +409,6 @@ const cart = (skin: Skin): Piece => {
   return piece(g, 10, 12)
 }
 
-/* ---------------- The maze ---------------- */
-
-/** Leafy clumps on a hedge's face and top, flowers or berries here and there; in the cave the "hedge" is rough rock. */
-const leafy = (skin: Skin, seed: number): BlockPaint => (fx, fy, e, h, top) => {
-  const n = noise(fx >> 1, (fy - e) >> 1, seed)
-  if (top) {
-    if (skin.snow) return shade(skin.hedgeTop, 0.6 + n * 0.4, fx, fy)
-    return shade(skin.hedgeTop, 0.35 + n * 0.6, fx, fy)
-  }
-  if (skin.snow && h - e < 2 + (noise(fx, 2, seed) < 0.4 ? 1 : 0)) return shade(skin.snow, 0.8, fx, e)
-  if (skin.bloom && e > 2 && noise(fx, e, seed + 5) < 0.018) return skin.bloom[Math.floor(noise(fx, e, seed + 6) * skin.bloom.length)]!
-  const l = 0.42 + (n - 0.5) * 0.55 - (e < 3 ? 0.18 : 0) + (e / Math.max(1, h)) * 0.2
-  // Dark gaps between the clumps.
-  return noise(fx, (fy - e) >> 1, seed + 7) < 0.08 ? skin.hedge[0]! : shade(skin.hedge, l, fx, e)
-}
-
-/** One row line of a maze's hedges (`hedgeRow`), topiary balls on the posts at its way in. */
-const hedge = (skin: Skin, variant: number): Piece => {
-  const pattern = Math.floor(variant / 8) % MAZE_COUNT
-  const row = variant % 8
-  const S = MAZE.cell
-  const { maze, entrance } = MAZE_LAYOUTS[pattern]!
-  const rowY = -MAZE_DIM * S + row * S
-  const rects = hedgeRow(maze, row).map(rectOf)
-  const H = 15
-  const { g, ox, oy, anchor } = extrude(rects, (fx, fy) => H + Math.round(noise(fx >> 1, fy >> 2, 9 + pattern) * 2), H + 2, leafy(skin, 40 + row), 0, rowY, 8)
-  if (row === maze.rows) {
-    // Topiary balls crown the two posts of the way in (on the south side, where it always is).
-    const mid = (entrance.c + 0.5 - maze.cols / 2) * S
-    for (const x of [mid - S / 2, mid + S / 2]) sculpt(g, [{ x: ox + x + 0.5, y: oy + rowY - H - 5, rx: 6, ry: 6 }], skin.snow ? skin.hedgeTop : skin.hedge, { tag: 9, seed: 4 })
-  }
-  outline(g, skin.outline)
-  return piece(g, anchor.ax, anchor.ay)
-}
-
 /* ---------------- The ruins ---------------- */
 
 /** Unown glyphs carved in the standing stones: `1` the carving, `2` the eye. */
@@ -718,20 +684,6 @@ const rails = (skin: Skin): Piece =>
     return null
   })
 
-/** Gravel paths through the maze and a flagstone at its way in. */
-const gravel = (skin: Skin, variant: number): Piece => {
-  const half = (MAZE_DIM * MAZE.cell) / 2
-  const { maze, entrance } = MAZE_LAYOUTS[variant % MAZE_COUNT]!
-  const inX = (entrance.c + 0.5 - maze.cols / 2) * MAZE.cell
-  return flat(-half - 6, -half * 2 - 6, half + 6, 14, (x, y) => {
-    // Two worn steps at the way in.
-    if (y > 0) return Math.abs(x - inX) < 13 && y < 11 ? (y === 5 || y === 10 ? skin.stone[1]! : shade(skin.stone, 0.85, x, y)) : null
-    if (Math.abs(x) > half + 4 || y < -half * 2 - 4) return null
-    const edge = Math.abs(x) > half + 2 || y < -half * 2 - 2
-    return edge ? shade(skin.stone, 0.4, x, y) : shade(skin.gravel, 0.3 + noise(x, y, 6) * 0.6, x, y)
-  })
-}
-
 /** The ruins' plaza: worn flagstones in a ring, grass between them, the path in from the south. */
 const plaza = (skin: Skin, variant: number): Piece => {
   const { rx, ry } = RUINS
@@ -780,8 +732,9 @@ export const LANDMARK_PIECES: Record<LandmarkPiece, (variant: number, biome: Bio
   bed: (_v, b) => bed(SKINS[b]),
   ridge: (_v, b) => ridge(b, SKINS[b]),
   cart: (_v, b) => cart(SKINS[b]),
-  hedge: (v, b) => hedge(SKINS[b], v),
   chest: (_v, b, open) => PLACE_PIECES.chest(open ? 1 : 0, b),
+  // The big maze's hedges are solids with no sprite of their own: their art is one baked canvas (`render/mazeArt.ts`).
+  mazeWall: () => ({ sprite: createCanvas(1, 1), ax: 0, ay: 0 }),
   menhir: (v, b, open) => menhir(SKINS[b], v, open),
   altar: (_v, b, open) => altar(SKINS[b], open),
   column: (v, b) => brokenPillar(ROCK_SKINS[b], 40 + v),
@@ -795,7 +748,6 @@ export const LANDMARK_PIECES: Record<LandmarkPiece, (variant: number, biome: Bio
 export const LANDMARK_GROUNDS: Record<LandmarkGround, (variant: number, biome: BiomeId) => Piece> = {
   floor: (v, b) => floor(SKINS[b], v),
   rails: (_v, b) => rails(SKINS[b]),
-  gravel: (v, b) => gravel(SKINS[b], v),
   plaza: (v, b) => plaza(SKINS[b], v),
   camp: (v, b) => campGround(SKINS[b], v),
 }
@@ -803,17 +755,16 @@ export const LANDMARK_GROUNDS: Record<LandmarkGround, (variant: number, biome: B
 /** Shadow width of each piece (0: none, it's flat or casts its own). */
 export const LANDMARK_SHADOW: Record<LandmarkPiece, number> = {
   wallN: 0, wallW: 0, wallE: 0, wallS: 0, well: 11, fence: 0, crate: 8, table: 9, bed: 0,
-  ridge: 0, cart: 9, hedge: 0, chest: 11, menhir: 6, altar: 13, column: 8, tent: 20, campfire: 0, log: 12, pack: 6,
+  ridge: 0, cart: 9, chest: 11, mazeWall: 0, menhir: 6, altar: 13, column: 8, tent: 20, campfire: 0, log: 12, pack: 6,
 }
 
 /** Pieces tall enough to go see-through when the player walks behind them. */
 export const LANDMARK_TALL: Record<LandmarkPiece, boolean> = {
   wallN: true, wallW: true, wallE: true, wallS: true, well: true, fence: false, crate: false, table: false, bed: false,
-  ridge: true, cart: false, hedge: true, chest: false, menhir: true, altar: true, column: true, tent: true, campfire: false, log: false, pack: false,
+  ridge: true, cart: false, chest: false, mazeWall: false, menhir: true, altar: true, column: true, tent: true, campfire: false, log: false, pack: false,
 }
 
 /** Pieces a run will likely meet, per biome, to sculpt in idle time before they show (`warmTerrain`). */
 export const LANDMARK_WARM: readonly (readonly [LandmarkPiece, number])[] = [
   ['ridge', 0], ['wallN', 0], ['wallW', 0], ['wallE', 0], ['wallS', 0], ['wallS', 1], ['tent', 0], ['tent', 1], ['altar', 0],
-  ...Array.from({ length: MAZE_COUNT * (MAZE_DIM + 1) }, (_, i) => ['hedge', Math.floor(i / (MAZE_DIM + 1)) * 8 + (i % (MAZE_DIM + 1))] as const),
 ]

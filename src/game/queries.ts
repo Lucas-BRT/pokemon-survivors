@@ -1,4 +1,5 @@
 import { clearShot, dormant } from './dungeon'
+import { hedgeBetween } from './mazeNav'
 import { onAnyScreen } from './players'
 import type { Enemy, Game } from './types'
 import { unseen } from './versusRules'
@@ -11,6 +12,8 @@ import * as dm from '../engine/dmath'
  */
 const caveHides = (g: Game, e: Enemy, x: number, y: number) => {
   const inside = g.place.inside
+  // A hedge between hides a foe too (a maze's, or one outside it from inside).
+  if (hedgeBetween(g, x, y, e.x, e.y - e.radius)) return true
   if (inside?.id !== 'cave' || !inside.state.plan) return false
   const plan = inside.state.plan
   if (dormant(plan, inside.state.visited, e.x - inside.x, e.y - inside.y)) return true

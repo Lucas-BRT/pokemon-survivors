@@ -123,7 +123,7 @@ describe('golden runs', () => {
   it('Honedge switches stances', () => {
     const { live, replayed, branch } = golden('honedge', 43, 150)
     expect(replayed).toBe(live)
-    expect([live, branch]).toEqual(['playing@150s L9 S0 277k ae8df589', null])
+    expect([live, branch]).toEqual(['playing@150s L9 S0 278k 6bb385b5', null])
   }, SLOW)
 
   it('Kyogre in the Legend mode on a haunted night: Pressure, its innate, an awakening, candies and jack-o\'-lanterns', () => {

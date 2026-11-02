@@ -1,48 +1,48 @@
 import { coopLocked } from '../data/coop'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import type { EnemyId } from '../data/enemies'
-import { MAZE } from '../data/landmarks'
 import { MAZE_CAST, MAZE_RUN } from '../data/mazeEvents'
 import { createRng, weightedPick } from '../engine/rng'
 import { dropItem } from './consumables'
 import { burst, floatText } from './effects'
 import { spawnEnemy } from './enemies'
 import { spawnAlpha } from './alphas'
-import { mazeOrigin, MAZE_LAYOUTS } from './landmarkLayout'
-import { MAZE_COUNT } from '../data/landmarks'
+import { cellCenter, mazeSitesNear, type MazeSite } from './grandMaze'
 import type { spawnMapEvent as SpawnMapEvent } from './mapEvents'
 import { COIN_VALUES } from './meta'
-import { dropCoins } from './pickups'
+import { awardEgg, dropCoins } from './pickups'
 import { centerScreen, standing } from './players'
 import { roomOf } from './room'
-import { featuresNear, type Landmark } from './terrain'
-import { deadEnds, distances, openings } from './procgen/maze'
+import { deadEnds, openings } from './procgen/maze'
 import type { Game } from './types'
 import * as dm from '../engine/dmath'
 
 /**
- * What happens inside an overworld hedge maze (`data/mazeEvents.ts`). The first time a player comes near one, its run is built from
- * the maze's own seed (so a replay builds the same): the dead ends are drawn into traps (spikes and bombs, the map events'), small
- * chests, a decoy chest that bites, keys and a pair of rings that carry a player to the other end; some corridors hide a Pokémon that
- * springs out when one comes close; and the chest at the heart (locked until the keys are in, when there are keys) wakes a guardian
- * the moment it opens. Scenery only in co-op (`COOP_LOCKS`), like the other landmarks.
+ * What happens inside the big hedge maze (`grandMaze.ts`, numbers and casts in `data/mazeEvents.ts`). The first time a player comes
+ * near one, its run is built from the maze's own seed (so a replay builds the same): the chambers and dead ends are drawn into small
+ * chests (some of them decoys, the heart's one looks no different), keys that lock the heart's chest, rings that carry a player to
+ * another, traps that only show themselves when someone comes close, and Pokémon hiding in the corridors that spring out when one
+ * does. The chest at the heart wakes a guardian the moment it opens. The horde stays out (`evict`): the Pokémon in here are the maze's
+ * (`Enemy.home`). Scenery only in co-op (`COOP_LOCKS`), like the other landmarks.
  */
 
-export type MazeMoment = 'key' | 'locked' | 'cache' | 'decoy' | 'ambush' | 'guard' | 'ring' | 'thief'
+export type MazeMoment = 'spot' | 'key' | 'locked' | 'cache' | 'decoy' | 'ambush' | 'guard' | 'ring' | 'thief' | 'heart' | 'trap'
 
-/** A small chest in a dead end: `decoy` ones spring a surprise instead of paying. */
+/** A chest (the heart's too): a decoy one springs a surprise instead of paying. */
 export type MazeCache = { x: number; y: number; open: boolean; t: number; decoy: EnemyId | null }
+/** A trap nobody has come near yet is `hidden`; close by, it `shows` as the map event it is. */
 export type MazeTrap = { x: number; y: number; kind: 'spikes' | 'bomb'; ev: number; fused: boolean; done: boolean }
 export type MazeHidden = { x: number; y: number; kind: EnemyId; fired: boolean }
 export type MazeKey = { x: number; y: number; taken: boolean }
 
 export type MazeRun = {
-  cell: number
+  key: number
+  heart: MazeCache
   caches: MazeCache[]
   traps: MazeTrap[]
   hidden: MazeHidden[]
   keys: MazeKey[]
-  /** The rings (two spots) and, by player slot, the one each just came out of (it takes them back only once they step off it). */
+  /** Rings in pairs: ring `i` carries to ring `i ^ 1`. */
   rings: Array<{ x: number; y: number }>
   ringTime: Record<number, number>
   ringLock: Record<number, number>
@@ -52,20 +52,17 @@ export type MazeRun = {
   guard: number
 }
 
-/** The cave-free state of every maze met this run, by landmark cell. */
+/** The mazes met this run, by site key. */
 export const createMazeState = (): Map<number, MazeRun> => new Map()
 
 const notify = (g: Game, moment: MazeMoment, n = 0, of = 0) => g.events.push({ kind: 'maze', moment, n, of })
 
-/** The run of the maze `lm`, built on first use. */
-const runOf = (g: Game, lm: Landmark): MazeRun => {
-  const known = g.mazes.get(lm.cell)
+/** The run of `site`, built on first use. */
+const runOf = (g: Game, site: MazeSite): MazeRun => {
+  const known = g.mazes.get(site.key)
   if (known) return known
-  const { maze, entrance, goal } = MAZE_LAYOUTS[lm.variant % MAZE_COUNT]!
-  const rng = createRng(dm.round(lm.cell * 7919 + lm.variant * 104729 + 17))
-  const o = mazeOrigin(maze.cols, maze.rows)
-  const at = (c: number, r: number) => ({ x: dm.round(lm.x + o.x + (c + 0.5) * MAZE.cell), y: dm.round(lm.y + o.y + (r + 0.5) * MAZE.cell) })
-  const fromIn = distances(maze, entrance.c, entrance.r).dist
+  const m = site.maze
+  const rng = createRng(site.seed + 17)
   const shuffle = <T,>(a: T[]) => {
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1))
@@ -74,72 +71,104 @@ const runOf = (g: Game, lm: Landmark): MazeRun => {
     return a
   }
   const cast = MAZE_CAST[g.biome.id]
-  const ends = shuffle(deadEnds(maze).filter((e) => !(e.c === goal.c && e.r === goal.r) && fromIn[e.r * maze.cols + e.c]! >= 3))
-  const take = (n: number) => ends.splice(0, n).map((e) => at(e.c, e.r))
-  const rings = ends.length >= 7 && rng() < MAZE_RUN.ringOdds ? take(1).concat(take(ends.length - 1 > 0 ? 1 : 0)) : []
-  const locked = rng() < MAZE_RUN.lockOdds
-  const keys = (locked ? take(MAZE_RUN.keys) : []).map((p): MazeKey => ({ ...p, taken: false }))
-  const decoy = rng() < MAZE_RUN.decoyOdds ? take(1) : []
-  const caches = take(MAZE_RUN.caches)
-  const decoyKind = (rng() < 0.5 ? 'voltorb' : cast.hide[0]) as EnemyId
-  const traps = ends.splice(0).map((e, i): MazeTrap => ({ ...at(e.c, e.r), kind: i % 2 === 0 ? 'spikes' : 'bomb', ev: -1, fused: false, done: false }))
-  // Hidden in the corridors (cells with two ways) away from the door and the heart.
+  const inChamber = (c: number, r: number) => site.chambers.some((q) => c >= q.c && c < q.c + q.w && r >= q.r && r < q.r + q.h)
+  const at = (c: number, r: number) => {
+    const p = cellCenter(site, c, r)
+    return { x: dm.round(p.x), y: dm.round(p.y) }
+  }
+  // Dead ends away from the ways in, the farthest first among a shuffle (keys go to the far ones).
+  const ends = shuffle(deadEnds(m).filter((e) => !inChamber(e.c, e.r) && site.fromIn[e.r * m.cols + e.c]! >= 6))
+  const far = [...ends].sort((a, b) => site.fromIn[b.r * m.cols + b.c]! - site.fromIn[a.r * m.cols + a.c]!)
+  const used = new Set<string>()
+  const take = (list: Array<{ c: number; r: number }>, n: number) => {
+    const out: Array<{ c: number; r: number }> = []
+    for (const e of list) {
+      if (out.length >= n) break
+      const k = `${e.c},${e.r}`
+      if (used.has(k)) continue
+      used.add(k)
+      out.push(e)
+    }
+    return out.map((e) => at(e.c, e.r))
+  }
+  const lockedHeart = rng() < MAZE_RUN.lockOdds
+  const keys = (lockedHeart ? take(far.slice(0, Math.max(MAZE_RUN.keys * 3, 9)), MAZE_RUN.keys) : []).map((p): MazeKey => ({ ...p, taken: false }))
+  const ringSpots = take(ends, MAZE_RUN.ringPairs * 2)
+  const guess = cast.hide[0] as EnemyId
+  const decoyKind = (): EnemyId => (rng() < 0.5 ? 'voltorb' : guess)
+  const cache = (p: { x: number; y: number }, forceReal = false): MazeCache => ({ ...p, open: false, t: 0, decoy: !forceReal && rng() < MAZE_RUN.decoyOdds ? decoyKind() : null })
+  const heartAt = site.chambers[site.heart]!
+  const heart: MazeCache = { ...at(heartAt.c + 1, heartAt.r + 1), open: false, t: 0, decoy: null }
+  // One chest in the middle of every other chamber, and the dead ends' ones.
+  const chamberChests = site.chambers.filter((_, i) => i !== site.heart).map((q) => cache(at(q.c + 1, q.r + 1)))
+  const caches = [...chamberChests, ...take(ends, MAZE_RUN.caches).map((p) => cache(p))]
+  const traps = take(ends, ends.length).map((p, i): MazeTrap => ({ ...p, kind: i % 2 === 0 ? 'spikes' : 'bomb', ev: -1, fused: false, done: false })).filter((_, i) => i % 3 !== 2)
+  // Hidden in corridors (cells with two ways), out of chambers and well in from the ways in.
   const corridors: Array<{ c: number; r: number }> = []
-  for (let r = 0; r < maze.rows; r++) for (let c = 0; c < maze.cols; c++) if (openings(maze, c, r) === 2 && fromIn[r * maze.cols + c]! >= 3 && !(c === goal.c && r === goal.r)) corridors.push({ c, r })
+  for (let r = 0; r < m.rows; r++) for (let c = 0; c < m.cols; c++) if (openings(m, c, r) === 2 && !inChamber(c, r) && site.fromIn[r * m.cols + c]! >= 5) corridors.push({ c, r })
   const count = Math.min(MAZE_RUN.hidden.max, MAZE_RUN.hidden.base + Math.floor(g.time / 60 / MAZE_RUN.hidden.perMinutes))
   const hidden = shuffle(corridors).slice(0, count).map((e): MazeHidden => ({ ...at(e.c, e.r), kind: cast.hide[Math.floor(rng() * cast.hide.length)]!, fired: false }))
   const run: MazeRun = {
-    cell: lm.cell,
-    caches: [...caches.map((p): MazeCache => ({ ...p, open: false, t: 0, decoy: null })), ...decoy.map((p): MazeCache => ({ ...p, open: false, t: 0, decoy: decoyKind }))],
+    key: site.key,
+    heart,
+    caches,
     traps,
     hidden,
     keys,
-    rings,
+    rings: ringSpots,
     ringTime: {},
     ringLock: {},
     hintAt: -1e9,
     guard: 0,
   }
-  g.mazes.set(lm.cell, run)
+  g.mazes.set(site.key, run)
+  notify(g, 'spot')
   return run
 }
 
-/** Keys still to find for the heart's chest of the maze at `cell` (0 when it isn't locked, or isn't built yet). */
-export const keysLeft = (g: Game, cell: number) => g.mazes.get(cell)?.keys.filter((k) => !k.taken).length ?? 0
+/** Keys still to find for the heart's chest of the maze with `key`. */
+export const keysLeft = (g: Game, key: number) => g.mazes.get(key)?.keys.filter((k) => !k.taken).length ?? 0
 
-/** Whether the heart's chest of the maze at `cell` waits for keys. Opening it is tried by `landmarks.ts`. */
-export const mazeLocked = (g: Game, cell: number) => keysLeft(g, cell) > 0
+/** Whether the heart's chest of the maze with `key` waits for keys. */
+export const mazeLocked = (g: Game, key: number) => keysLeft(g, key) > 0
 
-/** The locked chest of the maze at `cell` tells whoever stands at it how many keys are left, at most every few seconds. */
-export const hintLocked = (g: Game, cell: number) => {
-  const run = g.mazes.get(cell)
-  if (!run || g.now - run.hintAt < 3) return
+/** The locked chest of the maze with `key` tells whoever stands at it how many keys are left, at most every few seconds. */
+const hintLocked = (g: Game, run: MazeRun) => {
+  if (g.now - run.hintAt < 3) return
   run.hintAt = g.now
-  notify(g, 'locked', keysLeft(g, cell), run.keys.length)
+  notify(g, 'locked', keysLeft(g, run.key), run.keys.length)
 }
 
 /** The guardian a maze wakes: the biome's, or (rarely) the forest's legendary. */
-const guardian = (g: Game, lm: Landmark): EnemyId => {
-  const rng = createRng(dm.round(lm.cell * 31 + g.time))
+const guardian = (g: Game, site: MazeSite): EnemyId => {
+  const rng = createRng(dm.round(site.seed + g.time))
   if (rng() < MAZE_RUN.rare.odds && MAZE_RUN.rare.biomes.includes(g.biome.id)) return MAZE_RUN.rare.guard
   return weightedPick(rng, MAZE_CAST[g.biome.id].guard.map((id) => [id, 1] as const))
 }
 
-/** The heart's chest was opened: its guardian steps out of the hedges as an Alpha, and what came with it comes for the player. */
-export const wakeGuardian = (g: Game, lm: Landmark, x: number, y: number) => {
-  const run = runOf(g, lm)
-  if (run.guard !== 0) return
-  const boss = spawnAlpha(g, guardian(g, lm), x, y + 26)
-  run.guard = boss.id
-  burst(g, x, y + 10, { colors: ['#58a838', '#a8e068', '#2c5818'], count: 30, speed: 90, ttl: 0.7, gravity: 40 })
-  notify(g, 'guard')
-}
-
-/** Whether (x, y) is within `r` px of the world point (px, py). */
 const near = (x: number, y: number, px: number, py: number, r: number) => dm.sq(x - px) + dm.sq(y - py) < r * r
 
 /** A player in play within `r` px of (x, y), or null. */
 const someone = (g: Game, x: number, y: number, r: number) => g.players.find((p) => standing(g, p) && near(p.x, p.y, x, y, r)) ?? null
+
+/** Marks an enemy as the maze's own. */
+const homed = (e: ReturnType<typeof spawnEnemy>, site: MazeSite) => {
+  e.home = site.key
+  return e
+}
+
+/** The heart's chest opens: its treasure, and the guardian steps out as an Alpha. */
+const openHeart = (g: Game, site: MazeSite, run: MazeRun) => {
+  const { x, y } = run.heart
+  dropCoins(g, x, y - 4, Array.from({ length: MAZE_RUN.heartCoins + Math.floor(g.time / 300) }, () => COIN_VALUES[1]))
+  for (let i = 0; i < MAZE_RUN.heartItems; i++) dropItem(g, x - 8 + i * 16, y - 4, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
+  awardEgg(g, 'chest', x, y)
+  burst(g, x, y - 8, { colors: ['#ffffff', '#f8e070', '#f8c040', '#a8e0ff'], count: 26, speed: 90, ttl: 0.6, gravity: 60 })
+  notify(g, 'heart')
+  run.guard = homed(spawnAlpha(g, guardian(g, site), x, y + 30), site).id
+  burst(g, x, y + 12, { colors: ['#58a838', '#a8e068', '#2c5818'], count: 30, speed: 90, ttl: 0.7, gravity: 40 })
+  notify(g, 'guard')
+}
 
 const cacheLoot = (g: Game, c: MazeCache) => {
   dropCoins(g, c.x, c.y - 4, Array.from({ length: MAZE_RUN.cacheCoins }, () => COIN_VALUES[1]))
@@ -148,40 +177,35 @@ const cacheLoot = (g: Game, c: MazeCache) => {
   notify(g, 'cache')
 }
 
-/** What a decoy chest was: its Pokémon (or three of them) jumps out. */
-const springDecoy = (g: Game, c: MazeCache) => {
+/** What a decoy chest was: its Pokémon (or three of them) jumps out, the maze's own. */
+const springDecoy = (g: Game, site: MazeSite, c: MazeCache) => {
   const kind = c.decoy!
   const n = kind === 'voltorb' ? 1 : 3
-  for (let i = 0; i < n; i++) spawnEnemy(g, kind, c.x + (i - (n - 1) / 2) * 14, c.y + 8)
+  for (let i = 0; i < n; i++) homed(spawnEnemy(g, kind, c.x + (i - (n - 1) / 2) * 14, c.y + 10), site)
   burst(g, c.x, c.y - 8, { colors: ['#e83030', '#f8e858', '#ffffff', '#484848'], count: 26, speed: 120, ttl: 0.5 })
   notify(g, 'decoy')
 }
 
-const trapKind = { spikes: 'spikes', bomb: 'bomb' } as const
-
-/** Runs every maze a player is near: traps, chests, keys, rings and the Pokémon in the hedges. */
 /** `spawn` is the map events' (`mapEvents.ts`), handed in so this module never imports it (it would close an import cycle). */
 export const updateMazes = (g: Game, dt: number, spawn: typeof SpawnMapEvent) => {
   if (coopLocked(g, 'landmarks') || roomOf(g)) return
   const woke = new Set<number>()
   for (const p of g.players) {
     if (!standing(g, p)) continue
-    for (const f of featuresNear(g, p.x, p.y, MAZE_RUN.wake)) {
-      const lm = f.landmark
-      if (!lm || lm.id !== 'maze' || !near(lm.x, lm.y - (MAZE.cell * MAZE_LAYOUTS[lm.variant % MAZE_COUNT]!.maze.rows) / 2, p.x, p.y, MAZE_RUN.wake)) continue
-      if (woke.has(lm.cell)) continue
-      woke.add(lm.cell)
-      const run = runOf(g, lm)
+    for (const site of mazeSitesNear(g.terrain.seed, p.x, p.y, MAZE_RUN.wake)) {
+      if (woke.has(site.key)) continue
+      woke.add(site.key)
+      const run = runOf(g, site)
       stepTraps(g, run, spawn)
-      stepCaches(g, run, dt)
-      stepKeys(g, lm, run)
+      stepChests(g, site, run, dt)
+      stepKeys(g, site, run)
       stepRings(g, run, dt)
-      stepHidden(g, run)
+      stepHidden(g, site, run)
     }
   }
 }
 
-/** Keeps each trap's map event alive while someone is near (they are cleared when no one is, and put back), and retires a bomb that went off. */
+/** Shows a trap as the map event it is once someone comes close, and keeps it up; a bomb that went off is retired. */
 const stepTraps = (g: Game, run: MazeRun, spawn: typeof SpawnMapEvent) => {
   for (const t of run.traps) {
     if (t.done) continue
@@ -196,25 +220,34 @@ const stepTraps = (g: Game, run: MazeRun, spawn: typeof SpawnMapEvent) => {
       t.done = true
       continue
     }
-    const placed = spawn(g, trapKind[t.kind], t.x, t.y)
+    if (!someone(g, t.x, t.y, MAZE_RUN.trapReveal)) continue
+    const placed = spawn(g, t.kind, t.x, t.y)
     placed.ttl = Infinity
     t.ev = placed.id
+    notify(g, 'trap')
   }
 }
 
-const stepCaches = (g: Game, run: MazeRun, dt: number) => {
-  for (const c of run.caches) {
+const stepChests = (g: Game, site: MazeSite, run: MazeRun, dt: number) => {
+  const all = [run.heart, ...run.caches]
+  for (const c of all) {
     if (c.open) continue
-    const who = someone(g, c.x, c.y, MAZE_RUN.touch + 4)
+    const who = someone(g, c.x, c.y, MAZE_RUN.touch + 6)
+    // The heart waits for its keys: it only tells whoever stands there.
+    if (c === run.heart && who && mazeLocked(g, run.key)) {
+      hintLocked(g, run)
+      continue
+    }
     c.t = who ? c.t + dt : Math.max(0, c.t - dt * 2)
     if (c.t < MAZE_RUN.openTime) continue
     c.open = true
-    if (c.decoy) springDecoy(g, c)
+    if (c === run.heart) openHeart(g, site, run)
+    else if (c.decoy) springDecoy(g, site, c)
     else cacheLoot(g, c)
   }
 }
 
-const stepKeys = (g: Game, lm: Landmark, run: MazeRun) => {
+const stepKeys = (g: Game, site: MazeSite, run: MazeRun) => {
   for (const k of run.keys) {
     if (k.taken || !someone(g, k.x, k.y, MAZE_RUN.touch)) continue
     k.taken = true
@@ -223,7 +256,7 @@ const stepKeys = (g: Game, lm: Landmark, run: MazeRun) => {
     floatText(g, k.x, k.y - 22, left > 0 ? `${run.keys.length - left}/${run.keys.length}` : '✔', '#f8e070')
     notify(g, 'key', run.keys.length - left, run.keys.length)
     // A thief was after it: it comes for whoever took the key.
-    spawnEnemy(g, MAZE_RUN.thieves[Math.floor(createRng(dm.round(lm.cell + left * 13))() * MAZE_RUN.thieves.length)]!, k.x, k.y + 18)
+    homed(spawnEnemy(g, MAZE_RUN.thieves[Math.floor(createRng(dm.round(site.seed + left * 13))() * MAZE_RUN.thieves.length)]!, k.x, k.y + 18), site)
     notify(g, 'thief')
   }
 }
@@ -241,11 +274,12 @@ const stepRings = (g: Game, run: MazeRun, dt: number) => {
     }
     run.ringTime[p.slot] = (run.ringTime[p.slot] ?? 0) + dt
     if (run.ringTime[p.slot]! < MAZE_RUN.ringTime) continue
-    const to = run.rings[1 - here]!
+    const to = run.rings[here ^ 1]
+    if (!to) continue
     burst(g, p.x, p.y - 6, { colors: ['#c898f8', '#ffffff', '#f8d070'], count: 16, speed: 70, ttl: 0.5 })
     p.x = to.x
     p.y = to.y + 10
-    run.ringLock[p.slot] = 1 - here
+    run.ringLock[p.slot] = here ^ 1
     run.ringTime[p.slot] = 0
     centerScreen(g, p, p.x, p.y)
     burst(g, p.x, p.y - 6, { colors: ['#c898f8', '#ffffff', '#f8d070'], count: 16, speed: 70, ttl: 0.5 })
@@ -253,11 +287,11 @@ const stepRings = (g: Game, run: MazeRun, dt: number) => {
   }
 }
 
-const stepHidden = (g: Game, run: MazeRun) => {
+const stepHidden = (g: Game, site: MazeSite, run: MazeRun) => {
   for (const h of run.hidden) {
     if (h.fired || !someone(g, h.x, h.y, MAZE_RUN.ambushRadius)) continue
     h.fired = true
-    spawnEnemy(g, h.kind, h.x, h.y)
+    homed(spawnEnemy(g, h.kind, h.x, h.y), site)
     burst(g, h.x, h.y - 6, { colors: ['#58a838', '#a8e068', '#2c5818', '#ffffff'], count: 18, speed: 90, ttl: 0.5, gravity: 30 })
     notify(g, 'ambush')
   }

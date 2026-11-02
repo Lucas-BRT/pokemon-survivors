@@ -2298,23 +2298,23 @@ export const zh: Messages = {
   },
 
   landmarks: {
-    names: { cottage: '廢棄小屋', tunnel: '礦坑隧道', maze: '樹籬迷宮', ruins: '未知圖騰遺跡', camp: '廢棄營地' },
+    names: { cottage: '廢棄小屋', tunnel: '礦坑隧道', ruins: '未知圖騰遺跡', camp: '廢棄營地' },
     hints: {
       cottage: '有人在裡面留下了一個箱子…',
       tunnel: '從一個入口進去，從另一個出來。',
-      maze: '迷宮中心有個寶箱在等著。有東西守著它。',
       ruins: '祭壇靜靜地等待著。',
       camp: '營火旁留下了一個背包。',
     },
     loot: {
       cottage: '你翻遍了那個舊箱子！',
-      maze: '你抵達了迷宮的中心！',
       ruins: '未知圖騰的文字亮起來了！',
       camp: '你打開了被遺忘的背包！',
     },
     tunnelOut: '你從隧道的另一端出來了！',
     /** What happens in the hedge maze (`game/mazeRun.ts`). */
     maze: {
+      name: '樹籬迷宮',
+      hint: '迷宮中心有個寶箱在等著。有東西守著它。',
       key: (n: number, of: number) => `鑰匙 ${n}/${of}！`,
       locked: (left: number) => `寶箱上鎖了：還差 *${left} 把鑰匙*。`,
       cache: '死路裡藏著一個寶箱！',
@@ -2323,6 +2323,8 @@ export const zh: Messages = {
       guard: '迷宮的守護者醒了！',
       ring: '光環把你傳送到另一端！',
       thief: '小偷來搶鑰匙了！',
+      heart: '你打開了迷宮中心的寶箱！',
+      trap: '陷阱！',
     },
   },
   places: {

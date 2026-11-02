@@ -1,3 +1,6 @@
+import { GRAND } from '../data/mazeEvents'
+import { mazeSitesNear } from '../game/grandMaze'
+import { seenCells } from './mazeSight'
 import { caveFog, fogKey, SEEN_SCALE } from './caveSight'
 import { context2d, createCanvas, fromStrings, lazy, blitPacked, textSprite, type Palette, type PixelSprite } from '../engine/pixelart'
 import { hash2 } from '../engine/rng'
@@ -98,7 +101,6 @@ const CROSS = ['r.r', '.r.', 'r.r']
 const BALL = ['rrr', 'kwk', 'www']
 const HOUSE = ['..r..', '.rrr.', 'rrrrr', '.wkw.', '.wkw.']
 const TUNNEL = ['.sss.', 'sssss', 'skkks', 'skkks']
-const MAZE = ['mmmmm', 'm...m', 'm.m.m', 'm.m..', 'mmmmm']
 const RUINS = ['sssss', '.s.s.', '.s.s.', 'sssss']
 const TENT = ['..o..', '.ooo.', 'oo.oo', 'oo.oo']
 
@@ -114,7 +116,6 @@ const GLYPHS = lazy(() => ({
   landmark: {
     cottage: glyph(HOUSE, { r: '#d05838', w: '#f0e0b8', k: '#583018' }),
     tunnel: glyph(TUNNEL, { s: '#a09890', k: '#201818' }),
-    maze: glyph(MAZE, { m: '#c8b078' }),
     ruins: glyph(RUINS, { s: '#d8d0c0' }),
     camp: glyph(TENT, { o: '#e89838' }),
   } satisfies Record<LandmarkId, PixelSprite>,
@@ -430,6 +431,36 @@ const pickupGlyph = (p: Pickup) => {
   }
 }
 
+/**
+ * A big hedge maze on the map: its outer hedge (always known, one can see it from outside) and, inside, only the cells a player has
+ * seen (`render/mazeSight.ts`), as lit floor.
+ */
+const drawMazeMemory = (ctx: Ctx, g: Game, v: View, x: number, y: number) => {
+  for (const site of mazeSitesNear(g.terrain.seed, x, y, S * v.scale)) {
+    const mx = (wx: number) => Math.round(wx / v.scale - v.ox)
+    const my = (wy: number) => Math.round(wy / v.scale - v.oy)
+    const x0 = mx(site.x)
+    const y0 = my(site.y)
+    const x1 = mx(site.x + site.side)
+    const y1 = my(site.y + site.side)
+    ctx.fillStyle = '#2f6a34'
+    ctx.fillRect(x0, y0, x1 - x0, 1)
+    ctx.fillRect(x0, y1, x1 - x0 + 1, 1)
+    ctx.fillRect(x0, y0, 1, y1 - y0)
+    ctx.fillRect(x1, y0, 1, y1 - y0 + 1)
+    const known = seenCells(site)
+    ctx.fillStyle = '#b8b09c'
+    for (let r = 0; r < site.maze.rows; r++) {
+      for (let c = 0; c < site.maze.cols; c++) {
+        if (!known[r * site.maze.cols + c]) continue
+        const a = mx(site.x + c * GRAND.cell)
+        const b = my(site.y + r * GRAND.cell)
+        ctx.fillRect(a, b, Math.max(1, mx(site.x + (c + 1) * GRAND.cell) - a), Math.max(1, my(site.y + (r + 1) * GRAND.cell) - b))
+      }
+    }
+  }
+}
+
 /** The camera's view as a faint box, so the map reads against the screen. */
 const drawViewBox = (ctx: Ctx, v: View, g: Game) => {
   const x0 = mapX(v, g.camera.x)
@@ -496,6 +527,7 @@ export const drawMinimap = (ctx: Ctx, g: Game, shape: MinimapShape, t: number) =
         if (f.landmark) marks.push(f)
       }
     }
+    drawMazeMemory(ctx, g, v, me.x, me.y)
     if (g.place.entrance) drawFeature(ctx, v, g.place.entrance.terrain, look)
     drawViewBox(ctx, v, g)
     for (const f of marks) {

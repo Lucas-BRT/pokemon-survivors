@@ -23,11 +23,12 @@ const signOf = (root: HTMLElement) => {
   return sign
 }
 
-const showSign = (root: HTMLElement, id: LandmarkId) => {
-  const m = t().landmarks
+const showSign = (root: HTMLElement, id: LandmarkId) => showSignText(root, t().landmarks.names[id], t().landmarks.hints[id])
+
+const showSignText = (root: HTMLElement, name: string, hint: string) => {
   const sign = signOf(root)
-  setText(sign.querySelector('b')!, m.names[id])
-  setText(sign.querySelector('small')!, m.hints[id])
+  setText(sign.querySelector('b')!, name)
+  setText(sign.querySelector('small')!, hint)
   // Restarting the animation: off, a reflow, on.
   sign.classList.add('hidden')
   void sign.offsetWidth
@@ -39,6 +40,9 @@ export const mazeFeedback = (root: HTMLElement, moment: MazeMoment, n: number, o
   const m = t().landmarks.maze
   const say = (text: string, kind: 'minor' | 'important' = 'minor') => runToast(root, kind, text, 2600, 'maze')
   switch (moment) {
+    case 'spot':
+      playSfx('select')
+      return showSignText(root, m.name, m.hint)
     case 'key':
       playSfx('unlock')
       return say(m.key(n, of))
@@ -60,6 +64,11 @@ export const mazeFeedback = (root: HTMLElement, moment: MazeMoment, n: number, o
       return playSfx('whoosh')
     case 'thief':
       return say(m.thief)
+    case 'heart':
+      playSfx('unlock')
+      return say(m.heart)
+    case 'trap':
+      return playSfx('whoosh')
   }
 }
 

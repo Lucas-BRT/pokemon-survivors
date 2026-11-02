@@ -1124,7 +1124,6 @@ const startDebugRun = async (spec: NonNullable<ReturnType<typeof parseDebug>>) =
   const id = Object.keys(PLAYABLE).find((k) => k === spec.mon) as PlayableId | undefined
   await startRun(id ?? loadSave().partner)
   if (run) applyDebug(run.game, spec)
-  if (run && spec.maze) devLandmark(run.game, 'maze')
 }
 
 /** Set while `startRun` loads a run. */

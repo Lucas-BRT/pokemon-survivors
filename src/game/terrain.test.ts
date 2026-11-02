@@ -29,7 +29,8 @@ describe('terrain layout', () => {
     expect(sweep(SEED)).toEqual(sweep(SEED))
     expect(sweep(SEED)).not.toEqual(sweep(createTerrain(99).seed))
     for (const { f } of sweep(SEED)) {
-      for (const e of [...(f?.solids.flatMap((s) => s.foot) ?? []), ...(f?.lake?.foot ?? [])]) {
+      // A big hedge maze's cells hold only its hedges, which run across them (`mazeFeature`).
+      for (const e of [...(f?.solids.filter((s) => s.kind !== 'mazeWall').flatMap((s) => s.foot) ?? []), ...(f?.lake?.foot ?? [])]) {
         expect(Math.hypot(e.x, e.y) - Math.max(e.rx, e.ry)).toBeGreaterThan(TERRAIN.clearStart - TERRAIN.cell)
       }
     }
@@ -39,7 +40,8 @@ describe('terrain layout', () => {
     const C = TERRAIN.cell
     const m = TERRAIN.margin - 1
     for (const { cx, cy, f } of sweep(SEED)) {
-      for (const e of [...(f?.solids.flatMap((s) => s.foot) ?? []), ...(f?.lake?.foot ?? [])]) {
+      // A big hedge maze's cells hold only its hedges, which run across them (`mazeFeature`).
+      for (const e of [...(f?.solids.filter((s) => s.kind !== 'mazeWall').flatMap((s) => s.foot) ?? []), ...(f?.lake?.foot ?? [])]) {
         expect(e.x - e.rx).toBeGreaterThanOrEqual(cx * C + m)
         expect(e.x + e.rx).toBeLessThanOrEqual((cx + 1) * C - m)
         expect(e.y - e.ry).toBeGreaterThanOrEqual(cy * C + m)
@@ -50,7 +52,7 @@ describe('terrain layout', () => {
 
   it('puts every kind of feature on the map', () => {
     const kinds = new Set(sweep(SEED).flatMap(({ f }) => (f?.landmark ? [] : [...(f?.solids.map((s) => s.kind) ?? []), ...(f?.lake ? ['lake'] : [])])))
-    expect([...kinds].sort()).toEqual(['bush', 'cliff', 'lake', 'log', 'rock', 'tower', 'tree'])
+    expect([...kinds].sort()).toEqual(['bush', 'cliff', 'lake', 'log', 'mazeWall', 'rock', 'tower', 'tree'])
   })
 })
 

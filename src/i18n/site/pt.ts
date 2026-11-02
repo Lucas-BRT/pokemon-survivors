@@ -598,17 +598,17 @@ export const sitePt = {
     landmarks: {
       paragraphs: (p: { block: number; odds: number; open: string; tunnel: string }) => [
         `O mapa tem pontos de interesse fixos, colocados pela semente da partida como as montanhas e os lagos: no máximo um a cada ${p.block}×${p.block} trechos do mapa (${p.odds}% deles têm um), sempre com a cara do bioma em que a partida está. Ao chegar perto, uma placa de madeira mostra o nome do lugar no canto da tela.`,
-        `Quatro deles guardam um tesouro: fique ${p.open}s perto dele para abrir. Cada tesouro abre uma vez só por partida, e um brilho mostra os que ainda estão fechados. O túnel não tem tesouro, mas é um atalho: fique ${p.tunnel}s numa das bocas e você sai pela outra, do outro lado da montanha, enquanto a horda perde o seu rastro.`,
+        `Três deles guardam um tesouro: fique ${p.open}s perto dele para abrir. Cada tesouro abre uma vez só por partida, e um brilho mostra os que ainda estão fechados. O túnel não tem tesouro, mas é um atalho: fique ${p.tunnel}s numa das bocas e você sai pela outra, do outro lado da montanha, enquanto a horda perde o seu rastro.`,
         `Entre eles, moitas, troncos caídos e pedras e árvores soltas. Tudo isso bloqueia quem anda (inclusive a horda), mas Pokémon voadores, fantasmas e chefes passam por cima.`,
+        `À parte, o Labirinto de Sebes é gigante (maior que a tela), com várias entradas, corredores largos e sebes mais altas que você: só se vê o que está em linha reta. Há baús (nem todos são de verdade), armadilhas escondidas, chaves, anéis que teletransportam e Pokémon nas sebes, e o baú do coração acorda um guardião. A horda não entra, e cada bioma muda a regra do chão e da luz.`,
       ],
-      names: { cottage: 'Casa Abandonada', tunnel: 'Túnel da Mina', maze: 'Labirinto de Sebes', ruins: 'Ruínas Unown', camp: 'Acampamento Abandonado' } satisfies Record<LandmarkId, string>,
+      names: { cottage: 'Casa Abandonada', tunnel: 'Túnel da Mina', ruins: 'Ruínas Unown', camp: 'Acampamento Abandonado' } satisfies Record<LandmarkId, string>,
       placeHead: 'Lugar',
       whatHead: 'O que tem',
       lootHead: 'Tesouro',
       what: {
         cottage: 'Uma casa de pedra sem telhado: entre pela porta. Janelas, lareira, uma cama velha e um caixote no canto, além do poço no quintal.',
         tunnel: 'Uma serra comprida com uma boca de mina em cada ponta, trilhos e um carrinho de minério.',
-        maze: 'Sebes altas com um único caminho até o baú no centro. Quem anda se perde nos becos; você não precisa.',
         ruins: 'Pedras com glifos Unown em roda, um altar no meio e colunas caídas.',
         camp: 'Uma barraca, troncos em volta da fogueira ainda acesa e uma mochila esquecida.',
       } satisfies Record<LandmarkId, string>,

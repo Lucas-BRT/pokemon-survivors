@@ -1,5 +1,6 @@
+import { GRAND } from '../data/mazeEvents'
+import { hedgeRuns, mazeSiteAtPoint, mazeSiteOfCell, type MazeSite } from './grandMaze'
 import { MAZE_CAST } from '../data/mazeEvents'
-import { mazeBox } from './landmarkLayout'
 import { hash2, weightedPick } from '../engine/rng'
 import { abilityImmune } from './abilities'
 import { playerForm } from './branch'
@@ -7,7 +8,7 @@ import type { ArenaPiece } from '../data/arenas'
 import { CLIFFS, CLUSTER_SLOTS, LAKES, SOLID_FOOT, TERRAIN, type Ellipse, type FeatureKind, type SolidKind } from '../data/terrain'
 import type { PlacePiece } from '../data/places'
 import { LANDMARK, LANDMARK_IDS, type LandmarkGround, type LandmarkId, type LandmarkPiece } from '../data/landmarks'
-import { LANDMARK_VARIANTS, landmarkPlan } from './landmarkLayout'
+import { LANDMARK_VARIANTS, landmarkPlan, wallFoot } from './landmarkLayout'
 import { arenaGround, fits } from './arenaFloor'
 import { burst } from './effects'
 import { roomOf } from './room'
@@ -161,6 +162,18 @@ const scatter = (h: (salt: number) => number, ox: number, oy: number, feet: read
   return out
 }
 
+/** The hedges of `site` that pass through the terrain cell at (ox, oy), as solids with no sprite (the maze's art is its own canvas). */
+const mazeFeature = (site: MazeSite, ox: number, oy: number): Feature => {
+  const C = TERRAIN.cell
+  const pad = GRAND.wall
+  const solids: Solid[] = []
+  for (const r of hedgeRuns(site)) {
+    if (Math.max(r.x0, r.x1) < ox - pad || Math.min(r.x0, r.x1) > ox + C + pad || Math.max(r.y0, r.y1) < oy - pad || Math.min(r.y0, r.y1) > oy + C + pad) continue
+    solids.push({ kind: 'mazeWall', x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2, variant: 0, foot: wallFoot(r.x0, r.y0, r.x1, r.y1, GRAND.wall / 2) })
+  }
+  return { solids, lake: null }
+}
+
 /** The feature living in world cell (cx, cy), if any. Pure: same seed, same map. */
 export const featureAt = (seed: number, cx: number, cy: number): Feature | null => {
   const C = TERRAIN.cell
@@ -170,6 +183,9 @@ export const featureAt = (seed: number, cx: number, cy: number): Feature | null 
   const nx = Math.max(ox, Math.min(0, ox + C))
   const ny = Math.max(oy, Math.min(0, oy + C))
   if (nx * nx + ny * ny < TERRAIN.clearStart * TERRAIN.clearStart) return null
+  // A cell under a big hedge maze holds its hedges and nothing else (`game/grandMaze.ts`).
+  const site = mazeSiteOfCell(seed, cx, cy)
+  if (site) return mazeFeature(site, ox, oy)
   const h = (salt: number) => hash2(cx, cy, seed + salt)
   const mark = landmarkCell(seed, cx, cy) ? draftLandmark(h) : null
   const kind = mark ? null : weightedPick(() => h(0), KINDS)
@@ -406,15 +422,10 @@ export const groundAt = (g: Game, x: number, y: number): Ground => {
   if (room) return arenaGround(room.layout, x - room.x, y - room.y)
   for (const f of featuresNear(g, x, y, 0)) {
     if (f.lake && inside(f.lake.foot, x, y, 0)) return g.biome.id === 'snow' ? 'ice' : 'water'
-    // A hedge maze's floor follows its biome's rule: slippery in the snow, slow where webs and vines grow (`data/mazeEvents.ts`).
-    const lm = f.landmark
-    if (lm?.id === 'maze') {
-      const rule = MAZE_CAST[g.biome.id].rule
-      if (rule !== 'ice' && rule !== 'webs') continue
-      const box = mazeBox(lm.variant, lm.x, lm.y)
-      if (x > box.x && x < box.x + box.w && y > box.y && y < box.y + box.h) return rule === 'ice' ? 'ice' : 'water'
-    }
   }
+  // A big hedge maze's floor follows its biome's rule: slippery in the snow, slow where webs and vines grow (`data/mazeEvents.ts`).
+  const rule = MAZE_CAST[g.biome.id].rule
+  if ((rule === 'ice' || rule === 'webs') && mazeSiteAtPoint(g.terrain.seed, x, y)) return rule === 'ice' ? 'ice' : 'water'
   return 'land'
 }
 

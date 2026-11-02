@@ -10,6 +10,7 @@ import { nearestEnemy } from './queries'
 import { inDoorway } from './rift'
 import { atCaveChest } from './cave'
 import { clearShot, onFloor } from './dungeon'
+import { hedgeBetween, inHedge } from './mazeNav'
 import { CAVE } from '../data/places'
 import { inStandRing } from './mapEvents'
 import { spawnAttack } from './spawn'
@@ -240,6 +241,9 @@ const overlaps = (a: Attack, e: Enemy) => {
 
 const reach = (a: Attack) => (a.shape.kind === 'circle' ? a.shape.r : dm.hypot(a.shape.w, a.shape.h) / 2)
 
+/** Whether a move of this type goes through walls (ghost and psychic, `CAVE.phase`). */
+const phases = (a: Attack) => (CAVE.phase as readonly string[]).includes(a.type)
+
 /** The cave floor's layout and where it stands, when a hitbox of this type is stopped by its walls (ghost and psychic moves go through, `CAVE.phase`). */
 const wallsOf = (g: Game, a: Attack) => {
   const inside = g.place.inside
@@ -254,6 +258,7 @@ const collide = (g: Game, a: Attack) => {
     if (!e || e.dying >= 0 || isAlly(g, e) || !overlaps(a, e)) continue
     // The rock hides a foe from a hit: only what the hitbox can see in a straight line is touched.
     if (walls && !clearShot(walls.plan, a.x - walls.x, a.y - walls.y, e.x - walls.x, e.y - e.radius - walls.y)) continue
+    if (!phases(a) && hedgeBetween(g, a.x, a.y, e.x, e.y - e.radius)) continue
     if ((a.hits.get(e.id) ?? -1) > g.now) continue
     if (a.blast > 0) return detonate(g, a, false)
     a.hits.set(e.id, g.now + a.hitInterval)
@@ -324,10 +329,14 @@ export const updateAttacks = (g: Game, dt: number) => {
     if (a.age < 0) continue
     g.player = ownerOf(g, a.owner)
     move(g, a, a.motion, dt)
-    // A shot in flight stops at the cave's rock.
+    // A shot in flight stops at the cave's rock and at a maze's hedge.
     if (a.age >= 0 && FLYING.has(a.motion.kind)) {
       const walls = wallsOf(g, a)
       if (walls && !onFloor(walls.plan, a.x - walls.x, a.y - walls.y)) {
+        a.ttl = a.age
+        continue
+      }
+      if (!phases(a) && inHedge(g, a.x, a.y)) {
         a.ttl = a.age
         continue
       }

@@ -1,9 +1,6 @@
-import { createRng } from '../engine/rng'
-import { MAZE, MAZE_COUNT, MAZE_DIM, type LandmarkGround, type LandmarkId, type LandmarkPiece } from '../data/landmarks'
+import { type LandmarkGround, type LandmarkId, type LandmarkPiece } from '../data/landmarks'
 import type { Ellipse } from '../data/terrain'
 import * as dm from '../engine/dmath'
-import { PROCGEN } from '../data/procgen'
-import { generateMaze, type MazeLayout } from './procgen/maze'
 
 /**
  * Where each landmark's pieces stand, around its anchor (world px, before
@@ -27,7 +24,7 @@ export type LandmarkPlan = {
 }
 
 /** Looks of each landmark (`landmarkPlan`'s `variant`). */
-export const LANDMARK_VARIANTS: Record<LandmarkId, number> = { cottage: 2, tunnel: 1, maze: MAZE_COUNT, ruins: 2, camp: 2 }
+export const LANDMARK_VARIANTS: Record<LandmarkId, number> = { cottage: 2, tunnel: 1, ruins: 2, camp: 2 }
 
 /** A straight wall from (x0, y0) to (x1, y1), along x or along y, as a chain of ellipses `half` px thick. */
 export const wallFoot = (x0: number, y0: number, x1: number, y1: number, half: number): Ellipse[] => {
@@ -120,111 +117,6 @@ const tunnel = (): LandmarkPlan => {
   }
 }
 
-/* ---------------- The hedge maze ---------------- */
-
-/** A maze's walls: `h[r][c]` the wall on the north side of cell (c, r) (row `size` is the south edge), `v[r][c]` the one on its west side. */
-export type MazeWalls = { h: boolean[][]; v: boolean[][] }
-
-/**
- * A perfect maze carved from the center cell outward (depth first, seeded),
- * so every corridor reaches the heart; the middle of the south side is the way in.
- */
-export const carveMaze = (seed: number, n = MAZE.size): MazeWalls => {
-  const h = Array.from({ length: n + 1 }, () => Array<boolean>(n).fill(true))
-  const v = Array.from({ length: n }, () => Array<boolean>(n + 1).fill(true))
-  const rng = createRng(seed)
-  const seen = Array.from({ length: n }, () => Array<boolean>(n).fill(false))
-  const mid = Math.floor(n / 2)
-  const stack: (readonly [number, number])[] = [[mid, mid]]
-  seen[mid]![mid] = true
-  while (stack.length > 0) {
-    const [c, r] = stack[stack.length - 1]!
-    const next = ([[0, -1], [1, 0], [0, 1], [-1, 0]] as const).filter(([dx, dy]) => seen[r + dy]?.[c + dx] === false)
-    if (next.length === 0) {
-      stack.pop()
-      continue
-    }
-    const [dx, dy] = next[Math.floor(rng() * next.length)]!
-    if (dy === -1) h[r]![c] = false
-    if (dy === 1) h[r + 1]![c] = false
-    if (dx === -1) v[r]![c] = false
-    if (dx === 1) v[r]![c + 1] = false
-    seen[r + dy]![c + dx] = true
-    stack.push([c + dx, r + dy])
-  }
-  h[n]![mid] = false
-  return { h, v }
-}
-
-/** The mazes a run picks from, carved once. */
-export const MAZE_PATTERNS: readonly MazeWalls[] = Array.from({ length: MAZE.patterns }, (_, i) => carveMaze(7001 + i * 31))
-
-/** The six hand-picked mazes as layouts: in at the south middle, the chest at the heart. */
-const legacyLayout = (w: MazeWalls): MazeLayout => {
-  const n = MAZE.size
-  const mid = Math.floor(n / 2)
-  return { maze: { cols: n, rows: n, h: w.h, v: w.v }, entrance: { c: mid, r: n - 1, side: 2 }, goal: { c: mid, r: mid } }
-}
-
-/**
- * The mazes a run's landmarks pick from: generated from fixed seeds (`procgen/maze.ts`,
- * styles and size in `data/procgen.ts`, the way in always on the south side where
- * the anchor and the flagstone are), or the legacy patterns when `PROCGEN.maze` is off.
- */
-export const MAZE_LAYOUTS: readonly MazeLayout[] = PROCGEN.maze
-  ? Array.from({ length: PROCGEN.mazePatterns }, (_, i) => {
-      const style = PROCGEN.mazeStyles[i % PROCGEN.mazeStyles.length]!
-      return generateMaze(createRng(7001 + i * 31), { cols: PROCGEN.mazeSize, rows: PROCGEN.mazeSize, newest: style.newest, braid: style.braid, sides: [2] })
-    })
-  : MAZE_PATTERNS.map(legacyLayout)
-
-/** Where the maze's corridors start (its north-west corner), around its anchor at the middle of the south side. */
-export const mazeOrigin = (cols: number = MAZE_DIM, rows: number = MAZE_DIM) => ({ x: -(cols * MAZE.cell) / 2, y: -rows * MAZE.cell })
-
-/** The box a hedge maze at anchor (x, y) fills, in world px: its north-west corner and size (the corridors only, hedges' thickness included). */
-export const mazeBox = (variant: number, x: number, y: number) => {
-  const { maze } = MAZE_LAYOUTS[variant % MAZE_COUNT]!
-  const o = mazeOrigin(maze.cols, maze.rows)
-  return { x: x + o.x, y: y + o.y, w: maze.cols * MAZE.cell, h: maze.rows * MAZE.cell }
-}
-
-/**
- * The hedges of one row line of a maze (`row` 0 is its north edge, `size` its
- * south one): the walls along it, the walls of the row of cells above it and
- * a post wherever walls meet. One piece per line, so the player walks behind
- * the hedges south of them and in front of the rest.
- */
-export const hedgeRow = (walls: MazeWalls, row: number): Ellipse[] => {
-  const { cell: S, wall: T } = MAZE
-  const n = walls.h[0]!.length
-  const o = mazeOrigin(n, walls.v.length)
-  const foot: Ellipse[] = []
-  const y = o.y + row * S
-  for (let c = 0; c < n; c++) if (walls.h[row]![c]) foot.push(ellipseAt(o.x + (c + 0.5) * S, y, S / 2 + 1, T))
-  if (row > 0) for (let c = 0; c <= n; c++) if (walls.v[row - 1]![c]) foot.push(ellipseAt(o.x + c * S, y - S / 2, T, S / 2 + 1))
-  for (let c = 0; c <= n; c++) {
-    const touches = walls.h[row]![c - 1] === true || walls.h[row]![c] === true || walls.v[row - 1]?.[c] === true || walls.v[row]?.[c] === true
-    if (touches) foot.push(ellipseAt(o.x + c * S, y, T + 1, T))
-  }
-  return foot
-}
-
-/** A hedge maze with a chest at its heart, one of `MAZE_PATTERNS`. */
-const maze = (variant: number): LandmarkPlan => {
-  const { maze: walls, goal } = MAZE_LAYOUTS[variant % MAZE_COUNT]!
-  const o = mazeOrigin(walls.cols, walls.rows)
-  const heart = { x: o.x + (goal.c + 0.5) * MAZE.cell, y: o.y + (goal.r + 0.5) * MAZE.cell - 2 }
-  return {
-    pieces: [
-      ...Array.from({ length: walls.rows + 1 }, (_, row): PiecePlan => ({ kind: 'hedge', x: 0, y: o.y + row * MAZE.cell, variant: variant * 8 + row, foot: hedgeRow(walls, row) })),
-      { ...single('chest', heart.x, heart.y, 8, 4), loot: true },
-    ],
-    ground: { kind: 'gravel', variant, x: 0, y: 0 },
-    treasure: heart,
-    mouths: [],
-  }
-}
-
 /* ---------------- The ruins ---------------- */
 
 /** Standing stones around the altar, and the ring they stand on. */
@@ -283,8 +175,6 @@ export const landmarkPlan = (id: LandmarkId, variant: number): LandmarkPlan => {
       return cottage(variant)
     case 'tunnel':
       return tunnel()
-    case 'maze':
-      return maze(variant)
     case 'ruins':
       return ruins(variant)
     case 'camp':

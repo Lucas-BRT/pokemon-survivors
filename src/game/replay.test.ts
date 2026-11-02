@@ -349,7 +349,7 @@ describe('replays', () => {
     expect(resimulate(parseReplay(JSON.parse(JSON.stringify(replay)))!, staged)).toEqual({ time: g.time, kills: g.kills, level: g.player.level, branch: g.player.branch, phase: g.phase, stuck: false })
   })
 
-  it.each(['tunnel', 'maze', 'ruins'] as const)('re-simulate a run through a landmark: the %s', (id) => {
+  it.each(['tunnel', 'ruins'] as const)('re-simulate a run through a landmark: the %s', (id) => {
     /** The nearest landmark of the kind, the player one tick from stepping in (or opening its treasure). */
     const near = (g: Game) => {
       for (let r = 2; r < 30; r++) {

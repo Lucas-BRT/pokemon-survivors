@@ -1,7 +1,5 @@
 import { describe, it } from 'vitest'
 import { createRng } from '../../engine/rng'
-import { MAZE } from '../../data/landmarks'
-import { MAZE_PATTERNS } from '../landmarkLayout'
 import { DUNGEON, generateFloor, generateFloorV2, roomDistances, type DungeonFloor } from '../dungeon'
 import { generateMaze, mazeMetrics, type MazeLayout, type MazeMetrics, type MazeStyle } from './maze'
 
@@ -32,13 +30,6 @@ const ascii = ({ maze, entrance, goal }: MazeLayout) => {
   return lines.join('\n')
 }
 
-/** The maze the game has now: one of `MAZE_PATTERNS`, in at the south middle, the chest at the heart. */
-const baseline = (i: number): MazeLayout => {
-  const w = MAZE_PATTERNS[i]!
-  const n = MAZE.size
-  const mid = Math.floor(n / 2)
-  return { maze: { cols: n, rows: n, h: w.h, v: w.v }, entrance: { c: mid, r: n - 1, side: 2 }, goal: { c: mid, r: mid } }
-}
 
 const STYLES: Record<string, MazeStyle> = {
   'novo 7x7 corredores (newest .9)': { cols: 7, rows: 7, newest: 0.9, braid: 0 },
@@ -63,10 +54,9 @@ const row = (name: string, ms: readonly MazeMetrics[]) =>
     .join(' ')}`
 
 describe.skipIf(!import.meta.env.VITE_LAB)('procgen lab: mazes', () => {
-  it('compares the maze the game has now with the new styles', () => {
+  it('compares the maze styles', () => {
     const out: string[] = []
     out.push(`${'estilo'.padEnd(34)} ${'n'.padStart(4)}  ${['celul', 'passos', 'diam', 'reach%', 'becos', 'lacos', 'curvas', 'erros'].map((h) => h.padStart(6)).join(' ')}`)
-    out.push(row('atual (6 padroes 5x5, baú no centro)', MAZE_PATTERNS.map((_, i) => mazeMetrics(baseline(i)))))
     for (const [name, style] of Object.entries(STYLES)) {
       const ms: MazeMetrics[] = []
       for (let seed = 1; seed <= 200; seed++) ms.push(mazeMetrics(generateMaze(createRng(seed), style)))
@@ -76,7 +66,6 @@ describe.skipIf(!import.meta.env.VITE_LAB)('procgen lab: mazes', () => {
     for (const [name, style] of [['novo 9x9 misto + braid .3 (semente 7)', STYLES['novo 9x9 misto + braid .3']!], ['novo 9x9 corredores sem braid (semente 7)', { cols: 9, rows: 9, newest: 0.95, braid: 0 }]] as const) {
       out.push(name, ascii(generateMaze(createRng(7), style)), '')
     }
-    out.push('atual, padrao 0:', ascii(baseline(0)))
     console.log('\n' + out.join('\n'))
   })
 })

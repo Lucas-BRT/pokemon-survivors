@@ -2302,23 +2302,23 @@ export const es: Messages = {
   },
 
   landmarks: {
-    names: { cottage: 'Casa Abandonada', tunnel: 'Túnel de la Mina', maze: 'Laberinto de Setos', ruins: 'Ruinas Unown', camp: 'Campamento Abandonado' },
+    names: { cottage: 'Casa Abandonada', tunnel: 'Túnel de la Mina', ruins: 'Ruinas Unown', camp: 'Campamento Abandonado' },
     hints: {
       cottage: 'Alguien dejó una caja adentro…',
       tunnel: 'Entra por una boca y sal por la otra.',
-      maze: 'Hay un cofre en el corazón del laberinto. Algo lo guarda.',
       ruins: 'El altar espera en silencio.',
       camp: 'Una mochila olvidada junto a la fogata.',
     },
     loot: {
       cottage: '¡Revisaste la caja vieja!',
-      maze: '¡Llegaste al corazón del laberinto!',
       ruins: '¡Los glifos Unown brillan!',
       camp: '¡Abriste la mochila olvidada!',
     },
     tunnelOut: '¡Saliste del otro lado del túnel!',
     /** What happens in the hedge maze (`game/mazeRun.ts`). */
     maze: {
+      name: 'Laberinto de Setos',
+      hint: 'Hay un cofre en el corazón del laberinto. Algo lo guarda.',
       key: (n: number, of: number) => `¡Llave ${n}/${of}!`,
       locked: (left: number) => (left === 1 ? 'El cofre está cerrado: falta *1 llave*.' : `El cofre está cerrado: faltan *${left} llaves*.`),
       cache: '¡Un cofre escondido en un callejón!',
@@ -2327,6 +2327,8 @@ export const es: Messages = {
       guard: '¡El guardián del laberinto despertó!',
       ring: '¡El anillo te llevó al otro lado!',
       thief: '¡Un ladrón vino por la llave!',
+      heart: '¡Abriste el cofre del corazón del laberinto!',
+      trap: '¡Una trampa!',
     },
   },
   places: {

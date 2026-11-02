@@ -16,6 +16,7 @@ import { createTraitState, isAirborne, traitPace } from './traits'
 import { dormant, dungeonNav, spaceAt } from './dungeon'
 import { CAVE } from '../data/places'
 import { PROCGEN } from '../data/procgen'
+import { evict, mazeWaypoint } from './mazeNav'
 import { underground } from './landmarks'
 import { TRAITS } from '../data/traits'
 import { actAs, inPlay, nearestPlayer, nearestSeen, onAnyScreen, ownerOf, standing } from './players'
@@ -186,6 +187,8 @@ export const updateEnemies = (g: Game, dt: number) => {
       }
       continue
     }
+    // The horde stays out of the big hedge mazes (`mazeRun.ts`): one that ends up inside is put back on the nearest side.
+    evict(g, e)
     // Versus: a Pokémon's avatar stands where its player does (`versusCombat.ts`), never on its own.
     if (e.behavior.kind === 'avatar') continue
     // A cave room the team hasn't entered yet: its Pokémon stay put until someone steps in (or something alerts them).
@@ -244,6 +247,14 @@ export const updateEnemies = (g: Game, dt: number) => {
       if (nav && cave && nav(e.x - cave.x, e.y - cave.y, waypoint)) {
         tx = cave.x + waypoint.x
         ty = cave.y + waypoint.y
+      }
+      // A maze's own Pokémon follow the player down its corridors, never into a hedge.
+      if (e.home !== undefined) {
+        const to = mazeWaypoint(g, e, p)
+        if (to) {
+          tx = to.x
+          ty = to.y
+        }
       }
       const d = dirTo(e.x, e.y, tx, ty)
       vx = d.x * speed

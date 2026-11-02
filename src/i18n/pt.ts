@@ -2609,24 +2609,24 @@ export const pt = {
   /** Places: the cave, the graveyard and the sky (`data/places.ts`), their entrances on the map and what goes on inside. */
   landmarks: {
     /** The sign that slides in when a landmark comes close, as the games name a place. */
-    names: { cottage: 'Casa Abandonada', tunnel: 'Túnel da Mina', maze: 'Labirinto de Sebes', ruins: 'Ruínas Unown', camp: 'Acampamento Abandonado' } satisfies Record<LandmarkId, string>,
+    names: { cottage: 'Casa Abandonada', tunnel: 'Túnel da Mina', ruins: 'Ruínas Unown', camp: 'Acampamento Abandonado' } satisfies Record<LandmarkId, string>,
     /** A line under the name: what's there to do. */
     hints: {
       cottage: 'Alguém deixou um caixote lá dentro…',
       tunnel: 'Entre por uma boca e saia pela outra.',
-      maze: 'Há um baú no coração do labirinto. E algo o guarda.',
       ruins: 'O altar espera em silêncio.',
       camp: 'Uma mochila esquecida perto da fogueira.',
     } satisfies Record<LandmarkId, string>,
     loot: {
       cottage: 'Você vasculhou o caixote velho!',
-      maze: 'Você chegou ao coração do labirinto!',
       ruins: 'Os glifos Unown brilham!',
       camp: 'Você abriu a mochila esquecida!',
     } satisfies Record<TreasureLandmark, string>,
     tunnelOut: 'Você saiu do outro lado do túnel!',
     /** What happens in the hedge maze (`game/mazeRun.ts`). */
     maze: {
+      name: 'Labirinto de Sebes',
+      hint: 'Há um baú no coração do labirinto. E algo o guarda.',
       key: (n: number, of: number) => `Chave ${n}/${of}!`,
       locked: (left: number) => (left === 1 ? 'O baú está trancado: falta *1 chave*.' : `O baú está trancado: faltam *${left} chaves*.`),
       cache: 'Um baú escondido num beco!',
@@ -2635,6 +2635,8 @@ export const pt = {
       guard: 'O guardião do labirinto despertou!',
       ring: 'O anel te levou para o outro lado!',
       thief: 'Um ladrão veio atrás da chave!',
+      heart: 'Você abriu o baú do coração do labirinto!',
+      trap: 'Uma armadilha!',
     },
   },
   places: {

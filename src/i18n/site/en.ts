@@ -546,17 +546,17 @@ export const siteEn: SiteMessages = {
     landmarks: {
       paragraphs: (p) => [
         `The map has landmarks, placed from the run's seed like mountains and lakes: at most one per ${p.block}×${p.block} stretch of the map (${p.odds}% of them have one), always dressed for the biome the run is in. As you come close, a wooden sign names it in the corner of the screen.`,
-        `Four of them keep a treasure: stand next to it for ${p.open}s to open it. Each opens once per run, and a glint marks the ones still closed. The tunnel has no treasure but it's a shortcut: stand in one of its mouths for ${p.tunnel}s and you come out of the other, on the far side of the ridge, while the horde loses track of you.`,
+        `Three of them keep a treasure: stand next to it for ${p.open}s to open it. Each opens once per run, and a glint marks the ones still closed. The tunnel has no treasure but it's a shortcut: stand in one of its mouths for ${p.tunnel}s and you come out of the other, on the far side of the ridge, while the horde loses track of you.`,
         `Between them, bushes, fallen logs and lone rocks and trees. All of it blocks whoever walks (the horde too), but flying Pokémon, ghosts and bosses go over it.`,
+        `Apart from those, the Hedge Maze is huge (bigger than the screen), with several ways in, wide corridors and hedges taller than you: you only see what lies in a straight line. It holds chests (not all of them real), hidden traps, keys, rings that teleport and Pokémon in the hedges, and the chest at its heart wakes a guardian. The horde stays out, and each biome changes the rules of the floor and the light.`,
       ],
-      names: { cottage: 'Abandoned Cottage', tunnel: 'Mine Tunnel', maze: 'Hedge Maze', ruins: 'Unown Ruins', camp: 'Abandoned Camp' },
+      names: { cottage: 'Abandoned Cottage', tunnel: 'Mine Tunnel', ruins: 'Unown Ruins', camp: 'Abandoned Camp' },
       placeHead: 'Landmark',
       whatHead: "What's there",
       lootHead: 'Treasure',
       what: {
         cottage: 'A stone cottage without its roof: walk in through the door. Windows, a fireplace, an old bed and a crate in the corner, and a well in the yard.',
         tunnel: 'A long ridge with a mine mouth at each end, rails and an ore cart.',
-        maze: 'Tall hedges with a single way to the chest at the heart. Walkers get lost in the dead ends; you don’t have to.',
         ruins: 'Standing stones carved with Unown glyphs in a ring, an altar in the middle and fallen columns.',
         camp: 'A tent, logs around a fire still burning and a forgotten backpack.',
       },

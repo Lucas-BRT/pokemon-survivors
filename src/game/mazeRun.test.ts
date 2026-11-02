@@ -1,92 +1,117 @@
 import { describe, expect, it } from 'vitest'
 import { MAZE_RUN } from '../data/mazeEvents'
 import { createGame } from './game'
+import { inBox, nearestMaze } from './grandMaze'
 import { spawnMapEvent } from './mapEvents'
-import { hintLocked, keysLeft, mazeLocked, updateMazes } from './mazeRun'
-import { featureAt, type Landmark } from './terrain'
+import { evict } from './mazeNav'
+import { mazeLocked, updateMazes, type MazeRun } from './mazeRun'
 import type { Game } from './types'
 
-/** A run with the player beside the first hedge maze its terrain holds (the seed picks where). */
-const nearMaze = (seed = 3) => {
+/** A run with the player at the heart-chamber-far side of the first maze the seed gives (set at its entrance, inside the box). */
+const inMaze = (seed = 3) => {
   for (let s = seed; ; s++) {
     const g: Game = createGame('charmander', { w: 480, h: 270 }, s)
-    for (let cy = -14; cy <= 14; cy++) {
-      for (let cx = -14; cx <= 14; cx++) {
-        const lm: Landmark | undefined = featureAt(g.terrain.seed, cx, cy)?.landmark
-        if (lm?.id !== 'maze') continue
-        Object.assign(g.player, { x: lm.x, y: lm.y - 30 })
-        return { g, lm }
-      }
+    const site = nearestMaze(g.terrain.seed, 0, 0)
+    if (!site) {
+      if (s > seed + 40) throw new Error('no maze found')
+      continue
     }
-    if (s > seed + 40) throw new Error('no maze found')
+    const e = site.entrances[0]!
+    Object.assign(g.player, { x: site.x + (e.c + 0.5) * 64, y: site.y + (e.r + 0.5) * 64 })
+    updateMazes(g, 1 / 60, spawnMapEvent)
+    return { g, site, run: g.mazes.get(site.key)! }
   }
 }
 
-describe('the hedge maze at play', () => {
+const tick = (g: Game, seconds: number) => {
+  for (let i = 0; i < Math.ceil(seconds * 60); i++) updateMazes(g, 1 / 60, spawnMapEvent)
+}
+
+const stand = (g: Game, at: { x: number; y: number }) => Object.assign(g.player, { x: at.x, y: at.y })
+
+describe('the big hedge maze at play', () => {
   it('builds its run once a player comes near, the same for every run of the seed', () => {
-    const a = nearMaze()
-    const b = nearMaze()
-    updateMazes(a.g, 1 / 60, spawnMapEvent)
-    updateMazes(b.g, 1 / 60, spawnMapEvent)
-    const run = a.g.mazes.get(a.lm.cell)!
-    expect(run).toBeDefined()
-    expect(run.caches.length).toBeGreaterThan(0)
-    expect(run.hidden.length).toBeGreaterThanOrEqual(MAZE_RUN.hidden.base)
-    expect(JSON.stringify(run)).toBe(JSON.stringify(b.g.mazes.get(b.lm.cell)))
+    const a = inMaze()
+    const b = inMaze()
+    expect(a.run).toBeDefined()
+    expect(a.run.hidden.length).toBeGreaterThanOrEqual(MAZE_RUN.hidden.base)
+    expect(JSON.stringify(a.run)).toBe(JSON.stringify(b.run))
   })
 
-  it('keeps the heart’s chest locked until every key is in, and tells whoever stands there', () => {
-    const { g, lm } = nearMaze()
-    updateMazes(g, 1 / 60, spawnMapEvent)
-    const run = g.mazes.get(lm.cell)!
-    run.keys.push({ x: lm.x, y: lm.y - 30, taken: false })
-    expect(mazeLocked(g, lm.cell)).toBe(true)
-    g.events.length = 0
-    hintLocked(g, lm.cell)
-    expect(g.events.some((e) => e.kind === 'maze' && e.moment === 'locked')).toBe(true)
-    // Standing on the key takes it.
-    updateMazes(g, 1 / 60, spawnMapEvent)
-    expect(keysLeft(g, lm.cell)).toBe(run.keys.filter((k) => !k.taken).length)
-    for (const k of run.keys) k.taken = true
-    expect(mazeLocked(g, lm.cell)).toBe(false)
+  it('keeps the heart’s chest shut until every key is in, then opens it and wakes a guardian that belongs to the maze', () => {
+    for (let seed = 3; seed < 60; seed++) {
+      const { g, site, run } = inMaze(seed)
+      if (run.keys.length === 0) continue
+      stand(g, run.heart)
+      tick(g, MAZE_RUN.openTime + 0.3)
+      expect(run.heart.open).toBe(false)
+      expect(mazeLocked(g, site.key)).toBe(true)
+      expect(g.events.some((e) => e.kind === 'maze' && e.moment === 'locked')).toBe(true)
+      for (const k of run.keys) k.taken = true
+      const before = g.enemies.length
+      tick(g, MAZE_RUN.openTime + 0.3)
+      expect(run.heart.open).toBe(true)
+      expect(g.enemies.length).toBeGreaterThan(before)
+      expect(g.enemies.some((e) => e.id === run.guard && e.home === site.key)).toBe(true)
+      return
+    }
+    expect.fail('no locked maze in 60 seeds')
   })
 
   it('opens a small chest after standing at it a moment, and a decoy’s Pokémon jumps out', () => {
-    const { g, lm } = nearMaze()
-    updateMazes(g, 1 / 60, spawnMapEvent)
-    const run = g.mazes.get(lm.cell)!
+    const { g, run } = inMaze()
     const cache = run.caches[0]!
-    Object.assign(g.player, { x: cache.x, y: cache.y })
+    stand(g, cache)
     const before = g.enemies.length
-    for (let i = 0; i < Math.ceil((MAZE_RUN.openTime + 0.1) * 60); i++) updateMazes(g, 1 / 60, spawnMapEvent)
+    tick(g, MAZE_RUN.openTime + 0.2)
     expect(cache.open).toBe(true)
     if (cache.decoy) expect(g.enemies.length).toBeGreaterThan(before)
   })
 
-  it('springs a Pokémon out of the hedges when a player comes close, once', () => {
-    const { g, lm } = nearMaze()
-    updateMazes(g, 1 / 60, spawnMapEvent)
-    const h = g.mazes.get(lm.cell)!.hidden[0]!
-    Object.assign(g.player, { x: h.x, y: h.y })
-    updateMazes(g, 1 / 60, spawnMapEvent)
+  it('hides its traps until a player comes close, and shows them as the map events they are', () => {
+    const { g, run } = inMaze()
+    const t = run.traps[0]!
+    expect(g.mapEvents.list.some((e) => e.id === t.ev)).toBe(false)
+    stand(g, { x: t.x + MAZE_RUN.trapReveal + 30, y: t.y })
+    tick(g, 0.1)
+    expect(t.ev).toBe(-1)
+    stand(g, t)
+    tick(g, 0.1)
+    expect(g.mapEvents.list.some((e) => e.id === t.ev && e.kind === t.kind)).toBe(true)
+  })
+
+  it('springs a Pokémon out of the hedges when a player comes close, once, and it is the maze’s own', () => {
+    const { g, site, run } = inMaze()
+    const h = run.hidden[0]!
+    stand(g, h)
+    tick(g, 0.05)
     expect(h.fired).toBe(true)
+    expect(g.enemies.some((e) => e.home === site.key)).toBe(true)
     const n = g.enemies.length
-    updateMazes(g, 1 / 60, spawnMapEvent)
+    tick(g, 0.05)
     expect(g.enemies.length).toBe(n)
   })
 
-  it('carries a player through a ring to the other one', () => {
-    for (let seed = 3; seed < 40; seed++) {
-      const { g, lm } = nearMaze(seed)
-      updateMazes(g, 1 / 60, spawnMapEvent)
-      const run = g.mazes.get(lm.cell)!
+  it('carries a player through a ring to its pair', () => {
+    for (let seed = 3; seed < 60; seed++) {
+      const { g, run } = inMaze(seed)
       if (run.rings.length < 2) continue
-      const [a, b] = run.rings as [{ x: number; y: number }, { x: number; y: number }]
-      Object.assign(g.player, { x: a.x, y: a.y })
-      for (let i = 0; i < Math.ceil((MAZE_RUN.ringTime + 0.1) * 60); i++) updateMazes(g, 1 / 60, spawnMapEvent)
-      expect(Math.hypot(g.player.x - b.x, g.player.y - b.y)).toBeLessThan(20)
+      const [a, b] = run.rings as [MazeRun['rings'][number], MazeRun['rings'][number]]
+      stand(g, a)
+      tick(g, MAZE_RUN.ringTime + 0.2)
+      expect(Math.hypot(g.player.x - b.x, g.player.y - b.y)).toBeLessThan(24)
       return
     }
-    expect.fail('no maze with rings in 40 seeds')
+    expect.fail('no maze with rings in 60 seeds')
+  })
+
+  it('keeps the overworld’s horde out of its box, and lets the maze’s own Pokémon stay', () => {
+    const { g, site } = inMaze()
+    const mid = { x: site.x + site.side / 2, y: site.y + site.side / 2 }
+    const wild = { x: mid.x, y: mid.y, home: undefined as number | undefined }
+    expect(evict(g, wild)).toBe(true)
+    expect(inBox(site, wild.x, wild.y)).toBe(false)
+    expect(evict(g, { x: mid.x, y: mid.y, home: site.key })).toBe(false)
   })
 })
+

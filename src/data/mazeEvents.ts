@@ -24,31 +24,60 @@ export const MAZE_CAST = {
 } as const satisfies Record<BiomeId, MazeKind>
 
 export const MAZE_RUN = {
-  /** Px from the maze's anchor a player comes to before its run is built and its dead ends start to matter. */
-  wake: 300,
-  /** A chest, a decoy or a trap is triggered this close (px); a hidden Pokémon springs out at `ambushRadius`. */
-  touch: 16,
-  ambushRadius: 34,
-  /** Seconds standing at a small chest to open it. */
+  /** Px from a maze's box a player comes to before its run is built and its contents start to matter. */
+  wake: 320,
+  /** A chest, a key or a ring is touched this close (px); a hidden trap shows itself at `trapReveal`; a hidden Pokémon springs out at `ambushRadius`. */
+  touch: 18,
+  trapReveal: 44,
+  ambushRadius: 38,
+  /** Seconds standing at a chest to open it. */
   openTime: 0.6,
   /** Odds the heart's chest is locked behind keys, and how many keys it takes. */
-  lockOdds: 0.5,
-  keys: 2,
+  lockOdds: 0.6,
+  keys: 3,
   /** The thieves that come for a key, one by one. */
   thieves: ['purrloin', 'pawniard'] as readonly EnemyId[],
-  /** Odds of a decoy chest, of a pair of rings and of the rare guardian (a legendary of the forest, in the meadow or the forest). */
-  decoyOdds: 0.7,
-  ringOdds: 0.45,
+  /** Odds that a small chest is a decoy, how many small chests the dead ends hold (the chambers each keep one more) and how many pairs of rings. */
+  decoyOdds: 0.45,
+  caches: 5,
+  ringPairs: 2,
+  /** The rare guardian (a legendary of the forest, in the meadow or the forest). */
   rare: { guard: 'virizion' as EnemyId, odds: 0.08, biomes: ['meadow', 'forest'] as readonly BiomeId[] },
-  /** Dead ends beyond these are traps: half spikes, half bombs. */
-  caches: 2,
   /** Pokémon hiding in the hedges: this many, plus one for every `perMinutes`, at most `max`. */
-  hidden: { base: 2, perMinutes: 4, max: 5 },
+  hidden: { base: 8, perMinutes: 3, max: 16 },
   /** What a small chest holds: ₽ coins (of 50) and an item roll. */
   cacheCoins: 2,
   /** Seconds standing in a ring to step through it. */
   ringTime: 0.45,
-  /** How far (px) the players' light reaches in a dark maze, and how dark it is. */
-  vision: 78,
-  dark: 0.9,
+  /** The heart's treasure: ₽ coins (of 50) and item rolls, and an egg. */
+  heartCoins: 5,
+  heartItems: 2,
+} as const
+
+/**
+ * The big hedge maze, a site in the overworld (`game/grandMaze.ts`): `size`×`size` cells of `cell` px, each corridor `cell - wall` px wide
+ * between hedges `wall` px thick, bigger than a screen, with several ways in. The terrain's cells are grouped in blocks of `block`×`block`;
+ * a block holds one maze with chance `odds`, its box centered in `footprint`×`footprint` cells kept clear of scenery. Nothing within
+ * `clearStart` px of the run's start (its box would crowd it).
+ */
+export const GRAND = {
+  cell: 64,
+  wall: 16,
+  size: 29,
+  block: 12,
+  odds: 0.45,
+  footprint: 7,
+  clearStart: 1100,
+  /** Growing tree's odds of continuing from the newest cell, share of dead ends given a second way out. */
+  newest: 0.72,
+  braid: 0.3,
+  /** Open chambers (`roomSize`×`roomSize` cells with no hedge inside) and the ways in (drawn between these). */
+  rooms: 7,
+  roomSize: 3,
+  entrances: [4, 5],
+  /** How far (px) a player sees down a corridor, and the share of it past which the light fades out. */
+  vision: 300,
+  fadeFrom: 0.45,
+  /** What a cell the player has seen keeps of the light (0..1): a faint memory. */
+  memory: 0.2,
 } as const

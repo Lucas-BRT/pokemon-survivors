@@ -38,7 +38,7 @@ import { isClone } from '../game/legend'
 import { drawArena, drawRiftArrow, drawRiftFallAir, drawRiftFallGround, drawRiftFallOut, drawRiftPortal, dropArenas, riftFallLook, warmArena } from './rift'
 import { drawEntranceAir, drawEntranceGround, drawPlaceArrow, drawPlaceDark, drawPlaceFallOut, drawPlaceFloor, drawPlaceGround, drawPlaceOver, drawWings, dropPlaceFloor, placeFallLook } from './places'
 import { roomOf } from '../game/room'
-import { drawLandmarkAir, drawMazeDark, drawMazeRun, drawTunnelDark, playerUnderground } from './landmarks'
+import { drawLandmarkAir, drawMazeRun, drawTunnelDark, playerUnderground } from './landmarks'
 import { drawPokemon, sprites, type AnimName, type SpeciesSprites } from './sprites'
 import { bodyOf } from '../data/bodies'
 import { drawDrainVines, drawTypeEvolvedAttack, drawTypeEvolvedGround } from './typeEvolved'
@@ -61,6 +61,8 @@ import { drawTraitAir, drawTraitGround, traitLift, traitTint } from './traits'
 import { bolt, dashedRing } from './strokes'
 import { dropFog, drawWeather, warmFog, type FogMode } from './weather'
 import { drawHauntedNight, drawTreat } from './halloweenArt'
+import { drawMazeGround } from './mazeArt'
+import { drawMazeFog, mazeSees } from './mazeSight'
 import { drawSolid, drawTerrainGround, drawWading, keepTerrain, solidCovers, solidsInView, warmTerrain } from './terrain'
 import { drawGround, GROUND_LOOKAHEAD, warmGround } from './world'
 import { damageBudget, showsText, textAlpha, type DamageNumbers } from './damageNumbers'
@@ -984,7 +986,8 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   ctx.save()
   ctx.translate(-camX, -camY)
 
-  const visible = (x: number, y: number, m = 48) => x > camX - m && x < camX + w + m && y > camY - m && y < camY + h + m * 2
+  // Nothing behind a big maze's hedges is drawn (`mazeSees`): they are taller than the players are.
+  const visible = (x: number, y: number, m = 48) => x > camX - m && x < camX + w + m && y > camY - m && y < camY + h + m * 2 && mazeSees(g, x, y)
   const mates = opts.mates ?? []
   viewer = g.versus ? localPlayer(g) : null
   // Versus: a rival hidden in the grass draws nowhere.
@@ -996,6 +999,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   }
 
   drawTerrainGround(ctx, g, look, camX, camY)
+  drawMazeGround(ctx, g, camX, camY)
   // Versus: the spawn pads and the goal zones, under everything.
   if (g.versus) {
     drawValeZones(ctx, g, t)
@@ -1128,7 +1132,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   }
   drawEntranceAir(ctx, g, t)
   drawLandmarkAir(ctx, g, t, visible)
-  drawMazeRun(ctx, g, t, visible)
+  drawMazeRun(ctx, g, t)
   drawWings(ctx, g, t)
   drawPlaceOver(ctx, g, camX, camY)
   drawCrystalGlints(ctx, g)
@@ -1201,7 +1205,7 @@ export const render = (ctx: Ctx, g: Game, t: number, opts: RenderOptions) => {
   if (g.halloween && !g.rift.arena && !g.place.inside) drawHauntedNight(ctx, g, camX, camY, t)
   // The cave's dark and the graveyard's night, then the weather, over the world but under damage numbers.
   drawPlaceDark(ctx, g, camX, camY, t)
-  drawMazeDark(ctx, g, camX, camY)
+  drawMazeFog(ctx, g, camX, camY)
   drawNightmareDark(ctx, g, camX, camY, t)
   drawTunnelDark(ctx, g, camX, camY)
   drawWeather(ctx, g, camX, camY, t, opts.fog)

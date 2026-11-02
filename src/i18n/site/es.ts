@@ -550,17 +550,17 @@ export const siteEs: SiteMessages = {
     landmarks: {
       paragraphs: (p) => [
         `El mapa tiene puntos de interés fijos, colocados por la semilla de la partida como las montañas y los lagos: como máximo uno cada ${p.block}×${p.block} tramos del mapa (${p.odds}% de ellos tienen uno), siempre con el aspecto del bioma en que está la partida. Al acercarte, un cartel de madera muestra el nombre del lugar en la esquina de la pantalla.`,
-        `Cuatro de ellos guardan un tesoro: quédate ${p.open}s junto a él para abrirlo. Cada tesoro se abre una sola vez por partida, y un destello marca los que siguen cerrados. El túnel no tiene tesoro, pero es un atajo: quédate ${p.tunnel}s en una de sus bocas y sales por la otra, del otro lado de la montaña, mientras la horda te pierde el rastro.`,
+        `Tres de ellos guardan un tesoro: quédate ${p.open}s junto a él para abrirlo. Cada tesoro se abre una sola vez por partida, y un destello marca los que siguen cerrados. El túnel no tiene tesoro, pero es un atajo: quédate ${p.tunnel}s en una de sus bocas y sales por la otra, del otro lado de la montaña, mientras la horda te pierde el rastro.`,
         `Entre ellos, arbustos, troncos caídos y rocas y árboles sueltos. Todo eso bloquea a quien camina (también a la horda), pero los Pokémon voladores, los fantasmas y los jefes pasan por encima.`,
+        `Aparte, el Laberinto de Setos es enorme (más grande que la pantalla), con varias entradas, pasillos anchos y setos más altos que tú: solo se ve lo que está en línea recta. Tiene cofres (no todos de verdad), trampas ocultas, llaves, anillos que teletransportan y Pokémon en los setos, y el cofre del corazón despierta a un guardián. La horda no entra, y cada bioma cambia las reglas del suelo y la luz.`,
       ],
-      names: { cottage: 'Casa Abandonada', tunnel: 'Túnel de la Mina', maze: 'Laberinto de Setos', ruins: 'Ruinas Unown', camp: 'Campamento Abandonado' },
+      names: { cottage: 'Casa Abandonada', tunnel: 'Túnel de la Mina', ruins: 'Ruinas Unown', camp: 'Campamento Abandonado' },
       placeHead: 'Lugar',
       whatHead: 'Qué hay',
       lootHead: 'Tesoro',
       what: {
         cottage: 'Una casa de piedra sin techo: entra por la puerta. Ventanas, chimenea, una cama vieja y una caja en el rincón, y un pozo en el patio.',
         tunnel: 'Una sierra larga con una boca de mina en cada punta, rieles y un carrito de mineral.',
-        maze: 'Setos altos con un único camino hasta el cofre del centro. Quien camina se pierde en los callejones; tú no tienes por qué.',
         ruins: 'Piedras con glifos Unown en ronda, un altar en el medio y columnas caídas.',
         camp: 'Una carpa, troncos alrededor de la fogata todavía encendida y una mochila olvidada.',
       },
