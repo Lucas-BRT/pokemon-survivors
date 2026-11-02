@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAZE_RUN } from '../data/mazeEvents'
+import { MAZE_CAST, MAZE_RUN, mazeTheme } from '../data/mazeEvents'
 import { createGame } from './game'
 import { inBox, nearestMaze } from './grandMaze'
 import { spawnMapEvent } from './mapEvents'
@@ -30,6 +30,8 @@ const tick = (g: Game, seconds: number) => {
 }
 
 const stand = (g: Game, at: { x: number; y: number }) => Object.assign(g.player, { x: at.x, y: at.y })
+
+const run0 = (g: Game, site: { key: number }) => g.enemies.find((e) => e.id === g.mazes.get(site.key)?.guard)?.kind
 
 describe('the big hedge maze at play', () => {
   it('builds its run once a player comes near, the same for every run of the seed', () => {
@@ -133,6 +135,18 @@ describe('the big hedge maze at play', () => {
     tick(g, 0.1)
     expect(g.player.landmark.maze).toBe(-1)
     expect(hordeShut(g)).toBe(false)
+  })
+
+  it('fills the corridors with its theme’s Pokémon, out of sight, while someone is inside', () => {
+    const { g, site } = inMaze()
+    g.enemies.length = 0
+    const theme = mazeTheme(g.biome.id, site.seed)
+    expect(MAZE_CAST[g.biome.id].themes.map((t) => t.id)).toContain(theme.id)
+    tick(g, 120)
+    const own = g.enemies.filter((e) => e.home === site.key)
+    expect(own.length).toBeGreaterThan(MAZE_RUN.live.base - 1)
+    expect(own.every((e) => inBox(site, e.x, e.y))).toBe(true)
+    expect(own.filter((e) => !theme.hide.includes(e.kind) && e.kind !== run0(g, site)).length).toBe(0)
   })
 })
 

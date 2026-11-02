@@ -2325,7 +2325,9 @@ export const fr: Messages = {
       thief: 'Un voleur est venu chercher la clé !',
       heart: 'Tu as ouvert le coffre au cœur du labyrinthe !',
       trap: 'Un piège !',
-      enter: 'Tu es entré dans le *Labyrinthe de haies* ! La horde ne passe pas la haie.',
+      enter: (theme: string) => `Tu es entré dans le *Labyrinthe de haies* (${theme}) ! La horde ne passe pas la haie.`,
+      /** What a maze is themed after (`MAZE_THEME_IDS`): its Pokémon are of one kind. */
+      themes: { spores: 'Spores', bugs: 'Insectes', swamp: 'Marais', thorns: 'Épines', webs: 'Toiles', iron: 'Fer', junk: 'Déchets', ice: 'Glace', bandits: 'Bandits', spirits: 'Esprits', golems: 'Golems' },
     },
   },
   places: {

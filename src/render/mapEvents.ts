@@ -126,15 +126,23 @@ const drawFountain = (ctx: Ctx, ev: MapEventOf<'fountain'>, t: number) => {
   }
 }
 
+/**
+ * A chest's unlock ring and its progress arc, as every chest on the map shows them (the maze's too, so a decoy can't be told from a
+ * real one). Returns how many px the chest rattles, harder as the lock gives way.
+ */
+export const chestUnlockFx = (ctx: Ctx, x: number, y: number, radius: number, k: number, t: number) => {
+  dashedRing(ctx, x, y - 4, radius, t * 1.5, ['#b88818', '#806010'], 0.3)
+  if (k > 0) progressArc(ctx, x, y - 4, radius, k, '#fff0a0')
+  return k > 0 ? Math.round(Math.sin(t * 40) * k * 1.5) : 0
+}
+
 const drawChest = (ctx: Ctx, ev: MapEventOf<'chest'>, t: number) => {
   const { chest, chestOpen } = ART()
   const k = ev.state.progress
-  dashedRing(ctx, ev.x, ev.y - 4, CHEST.radius, t * 1.5, ['#b88818', '#806010'], 0.3)
-  if (k > 0) progressArc(ctx, ev.x, ev.y - 4, CHEST.radius, k, '#fff0a0')
+  const rattle = chestUnlockFx(ctx, ev.x, ev.y, CHEST.radius, k, t)
   groundShadow(ctx, ev.x, ev.y, 8)
   const sprite = ev.gone >= 0 ? chestOpen : chest
-  // Rattles harder as the lock gives way.
-  const shake = k > 0 && ev.gone < 0 ? Math.round(Math.sin(t * 40) * k * 1.5) : 0
+  const shake = ev.gone < 0 ? rattle : 0
   ctx.drawImage(sprite, Math.round(ev.x - sprite.width / 2 + shake), Math.round(ev.y - sprite.height + 1))
   if (ev.gone < 0 && (t + ev.id * 0.4) % 1.8 < 0.2) blitCentered(ctx, SPARKLE()[1]!, ev.x + 6, ev.y - 12)
 }

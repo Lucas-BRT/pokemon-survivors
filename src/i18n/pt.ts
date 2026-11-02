@@ -2637,7 +2637,9 @@ export const pt = {
       thief: 'Um ladrão veio atrás da chave!',
       heart: 'Você abriu o baú do coração do labirinto!',
       trap: 'Uma armadilha!',
-      enter: 'Você entrou no *Labirinto de Sebes*! A horda não passa da sebe.',
+      enter: (theme: string) => `Você entrou no *Labirinto de Sebes* (${theme})! A horda não passa da sebe.`,
+      /** What a maze is themed after (`MAZE_THEME_IDS`): its Pokémon are of one kind. */
+      themes: { spores: 'Esporos', bugs: 'Insetos', swamp: 'Pântano', thorns: 'Espinhos', webs: 'Teias', iron: 'Ferro', junk: 'Lixo', ice: 'Gelo', bandits: 'Bandidos', spirits: 'Espíritos', golems: 'Golens' },
     },
   },
   places: {

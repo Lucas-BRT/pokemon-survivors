@@ -1,5 +1,6 @@
 import type { BiomeId } from './biomes'
 import type { EnemyId } from './enemies'
+import { hash2 } from '../engine/rng'
 
 /**
  * What happens in the overworld's hedge maze (`game/mazeRun.ts`; the maze itself is `data/landmarks.ts`'s `MAZE`): its dead ends hold
@@ -7,21 +8,71 @@ import type { EnemyId } from './enemies'
  * guardian; and each biome gives it a rule of its own. Lines live in `i18n` (`landmarks.maze`).
  */
 
-/** What a biome's maze is like: who hides in the hedges, who guards the chest and the rule of the ground and light inside. */
-export type MazeKind = {
+/** A maze's theme: the Pokémon that live in it are of one kind (a family, a type, a trade), so a maze reads as a place of its own. */
+export type MazeTheme = {
+  id: string
+  /** Who lives in it: hides in the hedges, springs out of decoys and is spawned in the corridors while someone is inside. */
   hide: readonly EnemyId[]
+  /** Who guards the heart's chest. */
   guard: readonly EnemyId[]
-  /** `plain` nothing more, `ice` a slippery floor, `webs` a floor that slows everyone (webs and vines), `dark` the maze lit only round the players. */
-  rule: 'plain' | 'ice' | 'webs' | 'dark'
+}
+
+/** What a biome's mazes are like: the themes one of them draws (each maze has one, from its seed) and the rule of the ground inside. */
+export type MazeKind = {
+  themes: readonly MazeTheme[]
+  /** `plain` nothing more, `ice` a slippery floor, `webs` a floor that slows everyone (webs and vines). */
+  rule: 'plain' | 'ice' | 'webs'
 }
 
 export const MAZE_CAST = {
-  meadow: { hide: ['foongus', 'bramblin', 'maractus'], guard: ['tangrowth'], rule: 'plain' },
-  forest: { hide: ['carnivine', 'ferroseed', 'bramblin', 'joltik', 'galvantula'], guard: ['tangrowth', 'seismitoad'], rule: 'webs' },
-  cave: { hide: ['dwebble', 'galvantula', 'trubbish', 'croagunk'], guard: ['golurk', 'bisharp'], rule: 'dark' },
-  snow: { hide: ['vanillite', 'cryogonal'], guard: ['beartic', 'avalugg'], rule: 'ice' },
-  tower: { hide: ['yamask', 'greavard', 'bramblin'], guard: ['cofagrigus'], rule: 'dark' },
+  meadow: {
+    themes: [
+      { id: 'spores', hide: ['foongus', 'bramblin', 'maractus'], guard: ['tangrowth'] },
+      { id: 'bugs', hide: ['joltik', 'dwebble', 'galvantula'], guard: ['galvantula'] },
+      { id: 'swamp', hide: ['croagunk', 'trubbish', 'seismitoad'], guard: ['seismitoad'] },
+    ],
+    rule: 'plain',
+  },
+  forest: {
+    themes: [
+      { id: 'thorns', hide: ['carnivine', 'ferroseed', 'bramblin', 'foongus'], guard: ['tangrowth'] },
+      { id: 'webs', hide: ['joltik', 'galvantula', 'dwebble'], guard: ['galvantula'] },
+      { id: 'swamp', hide: ['croagunk', 'trubbish', 'seismitoad'], guard: ['seismitoad'] },
+    ],
+    rule: 'webs',
+  },
+  cave: {
+    themes: [
+      { id: 'iron', hide: ['pawniard', 'ferroseed', 'dwebble'], guard: ['bisharp'] },
+      { id: 'junk', hide: ['trubbish', 'croagunk', 'purrloin'], guard: ['golurk'] },
+      { id: 'webs', hide: ['joltik', 'galvantula', 'dwebble'], guard: ['galvantula'] },
+    ],
+    rule: 'plain',
+  },
+  snow: {
+    themes: [
+      { id: 'ice', hide: ['vanillite', 'cryogonal'], guard: ['avalugg', 'beartic'] },
+      { id: 'bandits', hide: ['purrloin', 'pawniard', 'vanillite'], guard: ['bisharp'] },
+    ],
+    rule: 'ice',
+  },
+  tower: {
+    themes: [
+      { id: 'spirits', hide: ['yamask', 'greavard', 'bramblin'], guard: ['cofagrigus'] },
+      { id: 'golems', hide: ['ferroseed', 'dwebble', 'pawniard'], guard: ['golurk'] },
+    ],
+    rule: 'plain',
+  },
 } as const satisfies Record<BiomeId, MazeKind>
+
+/** Every theme id, in a fixed order: the `enter` event carries a theme's place in it (the shell names it from `landmarks.maze.themes`). */
+export const MAZE_THEME_IDS = ['spores', 'bugs', 'swamp', 'thorns', 'webs', 'iron', 'junk', 'ice', 'bandits', 'spirits', 'golems'] as const
+
+/** The theme of the maze with this seed in a biome: drawn from the seed alone, so every client and the replay agree. */
+export const mazeTheme = (biome: BiomeId, seed: number): MazeTheme => {
+  const themes: readonly MazeTheme[] = MAZE_CAST[biome].themes
+  return themes[Math.floor(hash2(seed, 7, 41) * themes.length)]!
+}
 
 export const MAZE_RUN = {
   /** Px from a maze's box a player comes to before its run is built and its contents start to matter. */
@@ -30,8 +81,12 @@ export const MAZE_RUN = {
   touch: 18,
   trapReveal: 44,
   ambushRadius: 38,
+  /** The maze's own Pokémon that live in its corridors while someone is inside: this many, plus one for every `perMinutes` of the run, at most `max`, one more every `every` seconds, never closer than `away` px to a player nor in a straight line from one. */
+  live: { base: 6, perMinutes: 2, max: 18, every: 2.5, away: 220 },
   /** Seconds standing at a chest to open it. */
-  openTime: 0.6,
+  openTime: 1.5,
+  /** Px from a chest's middle inside which standing opens it (the ring drawn on the ground). */
+  chestRadius: 30,
   /** Odds the heart's chest is locked behind keys, and how many keys it takes. */
   lockOdds: 0.6,
   keys: 3,

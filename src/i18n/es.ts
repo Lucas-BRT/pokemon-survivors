@@ -2329,7 +2329,9 @@ export const es: Messages = {
       thief: '¡Un ladrón vino por la llave!',
       heart: '¡Abriste el cofre del corazón del laberinto!',
       trap: '¡Una trampa!',
-      enter: '¡Entraste al *Laberinto de Setos*! La horda no pasa del seto.',
+      enter: (theme: string) => `¡Entraste al *Laberinto de Setos* (${theme})! La horda no pasa del seto.`,
+      /** What a maze is themed after (`MAZE_THEME_IDS`): its Pokémon are of one kind. */
+      themes: { spores: 'Esporas', bugs: 'Insectos', swamp: 'Pantano', thorns: 'Espinas', webs: 'Telarañas', iron: 'Hierro', junk: 'Basura', ice: 'Hielo', bandits: 'Bandidos', spirits: 'Espíritus', golems: 'Golems' },
     },
   },
   places: {

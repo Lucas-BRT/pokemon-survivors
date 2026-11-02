@@ -1,13 +1,13 @@
 import { coopLocked } from '../data/coop'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import type { EnemyId } from '../data/enemies'
-import { MAZE_CAST, MAZE_RUN } from '../data/mazeEvents'
+import { mazeTheme, MAZE_RUN, MAZE_THEME_IDS } from '../data/mazeEvents'
 import { createRng, weightedPick } from '../engine/rng'
 import { dropItem } from './consumables'
 import { burst, floatText } from './effects'
 import { spawnEnemy } from './enemies'
 import { spawnAlpha } from './alphas'
-import { cellCenter, mazeSiteAtPoint, mazeSitesNear, type MazeSite } from './grandMaze'
+import { cellCenter, clearBetween, inBox, mazeSiteAtPoint, mazeSitesNear, type MazeSite } from './grandMaze'
 import type { spawnMapEvent as SpawnMapEvent } from './mapEvents'
 import { COIN_VALUES } from './meta'
 import { awardEgg, dropCoins } from './pickups'
@@ -50,6 +50,9 @@ export type MazeRun = {
   hintAt: number
   /** The guardian's enemy id once the heart's chest is open (0 before). */
   guard: number
+  /** Seconds (of the run) until the next of the maze's own Pokémon steps into a corridor, and how many have, which also seeds where. */
+  spawnIn: number
+  spawned: number
 }
 
 /** The mazes met this run, by site key. */
@@ -70,7 +73,7 @@ const runOf = (g: Game, site: MazeSite): MazeRun => {
     }
     return a
   }
-  const cast = MAZE_CAST[g.biome.id]
+  const cast = mazeTheme(g.biome.id, site.seed)
   const inChamber = (c: number, r: number) => site.chambers.some((q) => c >= q.c && c < q.c + q.w && r >= q.r && r < q.r + q.h)
   const at = (c: number, r: number) => {
     const p = cellCenter(site, c, r)
@@ -120,6 +123,8 @@ const runOf = (g: Game, site: MazeSite): MazeRun => {
     ringLock: {},
     hintAt: -1e9,
     guard: 0,
+    spawnIn: MAZE_RUN.live.every,
+    spawned: 0,
   }
   g.mazes.set(site.key, run)
   notify(g, 'spot')
@@ -143,7 +148,7 @@ const hintLocked = (g: Game, run: MazeRun) => {
 const guardian = (g: Game, site: MazeSite): EnemyId => {
   const rng = createRng(dm.round(site.seed + g.time))
   if (rng() < MAZE_RUN.rare.odds && MAZE_RUN.rare.biomes.includes(g.biome.id)) return MAZE_RUN.rare.guard
-  return weightedPick(rng, MAZE_CAST[g.biome.id].guard.map((id) => [id, 1] as const))
+  return weightedPick(rng, mazeTheme(g.biome.id, site.seed).guard.map((id) => [id, 1] as const))
 }
 
 const near = (x: number, y: number, px: number, py: number, r: number) => dm.sq(x - px) + dm.sq(y - py) < r * r
@@ -202,6 +207,7 @@ export const updateMazes = (g: Game, dt: number, spawn: typeof SpawnMapEvent) =>
       stepKeys(g, site, run)
       stepRings(g, run, dt)
       stepHidden(g, site, run)
+      stepLive(g, site, run, dt)
     }
   }
 }
@@ -210,10 +216,40 @@ export const updateMazes = (g: Game, dt: number, spawn: typeof SpawnMapEvent) =>
 const trackEntries = (g: Game) => {
   const outdoors = !g.place.inside && !g.rift.arena && !roomOf(g)
   for (const p of g.players) {
-    const key = outdoors && !p.gone ? (mazeSiteAtPoint(g.terrain.seed, p.x, p.y)?.key ?? -1) : -1
+    const site = outdoors && !p.gone ? mazeSiteAtPoint(g.terrain.seed, p.x, p.y) : null
+    const key = site?.key ?? -1
     if (key === p.landmark.maze) continue
     p.landmark.maze = key
-    if (key >= 0) notify(g, 'enter', p.slot)
+    if (site) notify(g, 'enter', p.slot, MAZE_THEME_IDS.indexOf(mazeTheme(g.biome.id, site.seed).id as (typeof MAZE_THEME_IDS)[number]))
+  }
+}
+
+/**
+ * While a player is inside, the maze's own Pokémon (its theme's) step into the corridors, out of sight and a good way from everyone, up
+ * to a cap that grows with the run: the maze is where the foes are, the horde outside is paused (`hordeShut`). The place is drawn from
+ * the maze's own seed and a count, never `g.rng`, so it doesn't depend on who was near when.
+ */
+const stepLive = (g: Game, site: MazeSite, run: MazeRun, dt: number) => {
+  const inside = g.players.filter((p) => standing(g, p) && inBox(site, p.x, p.y))
+  if (inside.length === 0) return
+  run.spawnIn -= dt
+  if (run.spawnIn > 0) return
+  run.spawnIn = MAZE_RUN.live.every
+  let alive = 0
+  for (const e of g.enemies) if (e.home === site.key && e.dying < 0 && e.id !== run.guard) alive++
+  const cap = Math.min(MAZE_RUN.live.max, MAZE_RUN.live.base + Math.floor(g.time / 60 / MAZE_RUN.live.perMinutes))
+  if (alive >= cap) return
+  const rng = createRng(dm.round(site.seed + 977 + run.spawned * 31))
+  run.spawned++
+  const m = site.maze
+  const theme = mazeTheme(g.biome.id, site.seed)
+  for (let tries = 0; tries < 14; tries++) {
+    const c = Math.floor(rng() * m.cols)
+    const r = Math.floor(rng() * m.rows)
+    const at = cellCenter(site, c, r)
+    if (inside.some((p) => !near(at.x, at.y, p.x, p.y, MAZE_RUN.live.away) || clearBetween(site, p.x, p.y, at.x, at.y))) continue
+    homed(spawnEnemy(g, theme.hide[Math.floor(rng() * theme.hide.length)]!, dm.round(at.x), dm.round(at.y)), site)
+    return
   }
 }
 
@@ -244,14 +280,15 @@ const stepChests = (g: Game, site: MazeSite, run: MazeRun, dt: number) => {
   const all = [run.heart, ...run.caches]
   for (const c of all) {
     if (c.open) continue
-    const who = someone(g, c.x, c.y, MAZE_RUN.touch + 6)
-    // The heart waits for its keys: it only tells whoever stands there.
-    if (c === run.heart && who && mazeLocked(g, run.key)) {
+    const who = someone(g, c.x, c.y, MAZE_RUN.chestRadius)
+    c.t = who ? c.t + dt : Math.max(0, c.t - dt * 2)
+    if (c.t < MAZE_RUN.openTime) continue
+    // The heart waits for its keys: it loads like any chest, then only tells whoever stands there.
+    if (c === run.heart && mazeLocked(g, run.key)) {
+      c.t = 0
       hintLocked(g, run)
       continue
     }
-    c.t = who ? c.t + dt : Math.max(0, c.t - dt * 2)
-    if (c.t < MAZE_RUN.openTime) continue
     c.open = true
     if (c === run.heart) openHeart(g, site, run)
     else if (c.decoy) springDecoy(g, site, c)

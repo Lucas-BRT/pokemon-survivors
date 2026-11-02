@@ -238,7 +238,7 @@ export const appearances = (id: EnemyId): Appearance[] => {
   const retinue = (Object.keys(DOMAINS) as RiftLegend[])
     .filter((by) => domainCast(by).includes(id))
     .map((by): Appearance => ({ kind: 'retinue', by }))
-  const mazes = (Object.values(MAZE_CAST) as readonly MazeKind[]).flatMap((k): Appearance[] => [
+  const mazes = (Object.values(MAZE_CAST) as readonly MazeKind[]).flatMap((k) => k.themes).flatMap((k): Appearance[] => [
     ...(k.hide.some((h) => h === id) ? [{ kind: 'maze' as const, role: 'hide' as const }] : []),
     ...(k.guard.some((h) => h === id) ? [{ kind: 'maze' as const, role: 'guard' as const }] : []),
   ])

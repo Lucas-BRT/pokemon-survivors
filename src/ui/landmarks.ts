@@ -1,6 +1,7 @@
 import { playSfx } from '../engine/audio'
 import type { LandmarkId } from '../data/landmarks'
 import type { LandmarkMoment } from '../game/landmarks'
+import { MAZE_THEME_IDS } from '../data/mazeEvents'
 import type { MazeMoment } from '../game/mazeRun'
 import { t } from '../i18n'
 import { pokeballIcon } from '../render/art'
@@ -71,7 +72,7 @@ export const mazeFeedback = (root: HTMLElement, moment: MazeMoment, n: number, o
       return playSfx('whoosh')
     case 'enter':
       playSfx('select')
-      return say(m.enter)
+      return say(m.enter(m.themes[MAZE_THEME_IDS[of]!] ?? ''))
   }
 }
 

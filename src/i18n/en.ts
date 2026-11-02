@@ -2327,7 +2327,9 @@ export const en: Messages = {
       thief: 'A thief came after the key!',
       heart: 'You opened the chest at the heart of the maze!',
       trap: 'A trap!',
-      enter: 'You entered the *Hedge Maze*! The horde cannot follow past the hedge.',
+      enter: (theme: string) => `You entered the *Hedge Maze* (${theme})! The horde cannot follow past the hedge.`,
+      /** What a maze is themed after (`MAZE_THEME_IDS`): its Pokémon are of one kind. */
+      themes: { spores: 'Spores', bugs: 'Bugs', swamp: 'Swamp', thorns: 'Thorns', webs: 'Webs', iron: 'Iron', junk: 'Junk', ice: 'Ice', bandits: 'Bandits', spirits: 'Spirits', golems: 'Golems' },
     },
   },
   places: {

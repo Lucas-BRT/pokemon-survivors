@@ -4,6 +4,7 @@ import { LANDMARK, TUNNEL } from '../data/landmarks'
 import { MAZE_RUN } from '../data/mazeEvents'
 import { mazeSees } from './mazeSight'
 import { drawChest } from './terrain'
+import { chestUnlockFx } from './mapEvents'
 import { featuresNear } from '../game/terrain'
 import { roomOf } from '../game/room'
 import { treasureOpen } from '../game/landmarks'
@@ -153,10 +154,11 @@ export const drawMazeRun = (ctx: Ctx, g: Game, t: number) => {
   for (const run of g.mazes.values()) {
     for (const c of [run.heart, ...run.caches]) {
       if (!sees(c.x, c.y)) continue
-      drawChest(ctx, g.biome.id, c.x, c.y, c.open)
+      // Every chest, the heart's too, shows the very same ring and arc as a chest on the map, and rattles the same.
+      const rattle = c.open ? 0 : chestUnlockFx(ctx, c.x, c.y, MAZE_RUN.chestRadius, c.t / MAZE_RUN.openTime, t)
+      drawChest(ctx, g.biome.id, c.x + rattle, c.y, c.open)
       if (c.open) continue
-      if (c.t > 0) drawProgress(ctx, c.x, c.y - 22, c.t / MAZE_RUN.openTime)
-      else if ((t * 0.5 + hash2(c.x, c.y, 3)) % 1 < 0.18) {
+      if (c.t <= 0 && (t * 0.5 + hash2(c.x, c.y, 3)) % 1 < 0.18) {
         // Every couple of seconds a chest catches the light: they all do, the same way.
         const k = ((t * 0.5 + hash2(c.x, c.y, 3)) % 1) / 0.18
         ctx.globalAlpha = 1 - Math.abs(k - 0.5) * 2

@@ -98,10 +98,10 @@ const runEvent = (g: Game, event: WaveEvent, index: number) => {
       spawnWaveBoss(g, species, event.at, event.finale)
       break
     case 'ring':
-      if (species) spawnRing(g, species, event.count)
+      if (species && !hordeShut(g)) spawnRing(g, species, event.count)
       break
     case 'swarm':
-      if (species) spawnSwarm(g, species, event.count)
+      if (species && !hordeShut(g)) spawnSwarm(g, species, event.count)
       break
   }
 }

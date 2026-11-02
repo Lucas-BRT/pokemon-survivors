@@ -2325,7 +2325,9 @@ export const zh: Messages = {
       thief: '小偷來搶鑰匙了！',
       heart: '你打開了迷宮中心的寶箱！',
       trap: '陷阱！',
-      enter: '你進入了*樹籬迷宮*！敵群無法越過樹籬。',
+      enter: (theme: string) => `你進入了*樹籬迷宮*（${theme}）！敵群無法越過樹籬。`,
+      /** What a maze is themed after (`MAZE_THEME_IDS`): its Pokémon are of one kind. */
+      themes: { spores: '孢子', bugs: '蟲', swamp: '沼澤', thorns: '荊棘', webs: '蛛網', iron: '鋼鐵', junk: '垃圾', ice: '冰', bandits: '盜賊', spirits: '靈魂', golems: '魔像' },
     },
   },
   places: {
