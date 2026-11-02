@@ -5,7 +5,8 @@ import { EVENTS } from '../data/waves'
 import { MAZE_CAST, MAZE_DEBUG, MAZE_RUN } from '../data/mazeEvents'
 import { setBiome } from '../game/biomes'
 import { descendCave, relayCave, springAmbush, springHouse } from '../game/cave'
-import { applyLab, goToMaze, type Lab } from '../game/debugStart'
+import { applyAltCave, applyLab, goToMaze, type Lab } from '../game/debugStart'
+import { ALT_CAVE_IDS, ALT_CAVES, type AltCaveId } from '../game/altCaves'
 import { DEBUG_RUN, DEBUG_STATS, DEBUG_TUNE, resetTune, TUNED_STATS, type TunedStat } from '../game/debugTune'
 import { gainXp, recomputeStats } from '../game/leveling'
 import { MOVES, type MoveId } from '../game/moves'
@@ -154,6 +155,8 @@ const lightTab: Tab = {
 
 let caveLevelPick = 3
 let caveSeed = 1
+let altPick: AltCaveId = 'tour'
+let altDepth = 0
 let worldSeed = 1
 
 /** The cave the team is in, if any. */
@@ -221,6 +224,18 @@ const caveTab: Tab = {
           { label: 'Reveal floor', run: () => { const inside = caveOf(g); if (!g || !inside?.state.plan) return NEED_CAVE; inside.state.visited = inside.state.plan.rooms.map((_, i) => i) } },
           { label: 'Turn all sources on', run: () => { const inside = caveOf(g); if (!inside) return NEED_CAVE; for (const k of inside.state.sources) Object.assign(k, { on: true, left: 999, age: 99 }) } },
           { label: 'Turn all sources off', run: () => { const inside = caveOf(g); if (!inside) return NEED_CAVE; for (const k of inside.state.sources) Object.assign(k, { on: false, left: 0, age: 0 }) } },
+        ],
+      },
+      { t: 'title', label: 'AltCaves (hand-built floors for the light)' },
+      { t: 'select', label: 'Floor', options: ALT_CAVE_IDS, get: () => altPick, set: (v) => (altPick = v as AltCaveId) },
+      { t: 'info', text: () => ALT_CAVES[altPick].note },
+      { t: 'slider', label: 'Depth (floors down; 0 = B1F)', min: 0, max: 4, step: 1, get: () => altDepth, set: (n) => (altDepth = n) },
+      {
+        t: 'buttons',
+        items: [
+          { label: 'Build it', run: () => { if (!g || !applyAltCave(g, altPick, altDepth)) return NEED_CAVE; return 'Built; dark spawns off (Spawn tab → Normal turns them on).' } },
+          { label: 'Reveal floor', run: () => { const inside = caveOf(g); if (!g || !inside?.state.plan) return NEED_CAVE; inside.state.visited = inside.state.plan.rooms.map((_, i) => i) } },
+          { label: 'Turn all sources on', run: () => { const inside = caveOf(g); if (!inside) return NEED_CAVE; for (const k of inside.state.sources) Object.assign(k, { on: true, left: 999, age: 99 }) } },
         ],
       },
       { t: 'title', label: 'Generation' },

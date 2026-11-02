@@ -86,7 +86,8 @@ import { legendDevTools } from './game/legendDev'
 import { bankCapture, captureDevTools, showCapture } from './ui/capture'
 import { riftDevTools } from './game/riftDev'
 import { placeDevTools } from './game/placeDev'
-import { applyDebug, goToMaze, parseDebug } from './game/debugStart'
+import { applyAltCave, applyDebug, goToMaze, parseDebug } from './game/debugStart'
+import type { AltCaveId } from './game/altCaves'
 import { placeFeedback } from './ui/places'
 import { landmarkFeedback, mazeFeedback } from './ui/landmarks'
 import { PLACES } from './data/places'
@@ -4399,6 +4400,8 @@ if (import.meta.env.DEV) {
       card: (partner: PlayableId = loadSave().partner) => (endRun(), setScreen(sharePreview(ui, input, trainerShare(partner), () => showTitle()))),
       biome: (id: BiomeId) => withRun((g) => setBiome(g, id)),
       terrain: (kind?: SolidKind | 'lake', dy?: number) => (run ? devTerrain(run.game, kind, dy) : console.warn('ps: start a run first')),
+      /** `ps.altCave('tour', 2)` builds an AltCave (`tour`, `sources`, `dark`: hand-built floors to test the light in) 2 floors down in the running cave. */
+      altCave: (id: AltCaveId = 'tour', depth = 0) => withRun((g) => void (applyAltCave(g, id, depth) || console.warn('ps: enter the cave first'))),
       /** `ps.maze()` sets the team down outside the nearest big hedge maze's first way in (`ps.maze(true)` a step inside), whatever the distance. */
       maze: (inside = false) => withRun((g) => void (goToMaze(g, inside) || console.warn('ps: no maze found'))),
       /** `ps.landmark('cottage')` walks you to the nearest landmark (`tunnel`, `ruins`, `camp`; any without an argument), 60 px south of it. */

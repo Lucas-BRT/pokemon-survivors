@@ -3,7 +3,9 @@ import { BIOMES, type BiomeId } from '../data/biomes'
 import { setBiome } from './biomes'
 import { PLACE_IDS, type PlaceId } from '../data/places'
 import { CAVE_NPCS, type CaveNpcId } from '../data/caveShop'
-import { descendCave, stagePlan } from './cave'
+import { descendCave, relayCave, stagePlan } from './cave'
+import { ALT_CAVE_IDS, ALT_CAVES, type AltCaveId } from './altCaves'
+import { DEBUG_TUNE } from './debugTune'
 import { CAVE } from '../data/places'
 import type { DungeonFloor, Rect } from './dungeon'
 import { placeTeam } from './players'
@@ -16,10 +18,10 @@ import type { Game } from './types'
  * `?debug=cave` starts inside the cave; `&floor=2` takes its stairs that many
  * times, `&mon=charmander` picks the Pokémon, `&coins=5000` and `&gems=6` fill the run's ₽ and gems, and
  * `&shop=sableyeShiny` (a `CAVE_NPCS` id) puts that dweller in the floor's Cristalário and the team beside it.
- * `&level=4` sets the cave's level (1 to 5). `?debug=maze` walks the run to the nearest hedge maze's first way in (`&biome=snow` first sets its biome, `&in` stands inside it). A bare `?debug` just starts a run. Never ranked:
+ * `&level=4` sets the cave's level (1 to 5). `&alt=tour` (or `sources`, `dark`) builds that AltCave (`altCaves.ts`, a hand-built floor to test the light in) and `&depth=3` puts it that many floors down. `?debug=maze` walks the run to the nearest hedge maze's first way in (`&biome=snow` first sets its biome, `&in` stands inside it). A bare `?debug` just starts a run. Never ranked:
  * the shell skips the debug runs' banking, and this only runs in dev.
  */
-export type DebugStart = { place: PlaceId | null; level: number; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; inside: boolean; biome: BiomeId | null }
+export type DebugStart = { place: PlaceId | null; level: number; alt: AltCaveId | null; depth: number; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; inside: boolean; biome: BiomeId | null }
 
 /** The light lab (`&lab=S:C:D`): one room of S times the reference area, C light sources inside it, D in its door tile. */
 export type Lab = { size: number; inside: number; doors: number; vertical: 0 | 1 | 2 }
@@ -87,6 +89,8 @@ export const parseDebug = (search: string): DebugStart | null => {
   return {
     place: PLACE_IDS.find((id) => id === place) ?? null,
     level: Math.max(1, Math.min(5, num('level') || 1)),
+    alt: ALT_CAVE_IDS.find((id) => id === q.get('alt')) ?? null,
+    depth: Math.min(4, num('depth')),
     floor: num('floor'),
     mon: q.get('mon'),
     coins: num('coins'),
@@ -126,6 +130,7 @@ export const applyDebug = (g: Game, input: DebugStart) => {
   if (spec.maze) goToMaze(g, spec.inside)
   g.player.gems += spec.gems
   if (spec.place) enterPlace(g, spec.place, Math.round(g.player.x), Math.round(g.player.y), spec.level)
+  if (spec.alt && spec.place === 'cave') applyAltCave(g, spec.alt, spec.depth)
   // The lab's floor replaces the next one drawn: B2F with a room of the asked size.
   if (spec.lab) stagePlan(labPlan(spec.lab))
   for (let i = 0; i < spec.floor; i++) {
@@ -140,6 +145,22 @@ export const applyDebug = (g: Game, input: DebugStart) => {
     shop.npc = spec.shop
     placeTeam(g, inside.x + shop.x, inside.y + shop.y + 60)
   }
+}
+
+/**
+ * Builds an AltCave (`altCaves.ts`) in the running cave, `depth` floors down (0 is B1F), the team at its start, no foes, no dark spawns
+ * (`DEBUG_TUNE.place` 0: the debug room is for looking at the light) and an hour on the wind. Dev only.
+ */
+export const applyAltCave = (g: Game, id: AltCaveId, depth = 0) => {
+  const inside = g.place.inside
+  if (inside?.id !== 'cave') return false
+  stagePlan(ALT_CAVES[id].build())
+  inside.state.floor = depth
+  relayCave(g, inside)
+  g.enemies.length = 0
+  inside.left = 3600
+  DEBUG_TUNE.place = 0
+  return true
 }
 
 /** Rebuilds the cave around a new lab room (`labPlan`) without restarting the run: the light menu's "Aplicar". Dev only. */

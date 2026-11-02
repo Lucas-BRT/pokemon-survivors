@@ -4,7 +4,12 @@ import { parseDebug } from './debugStart'
 describe('parseDebug', () => {
   it('is null without ?debug and reads a place, floor, Pokémon and ₽ with it', () => {
     expect(parseDebug('?loja')).toBeNull()
-    expect(parseDebug('?debug=cave&floor=2&mon=charmander&coins=5000&shop=sableyeShiny&gems=4')).toEqual({ place: 'cave', level: 1, floor: 2, mon: 'charmander', coins: 5000, gems: 4, shop: 'sableyeShiny', lab: null, maze: false, inside: false, biome: null })
+    expect(parseDebug('?debug=cave&floor=2&mon=charmander&coins=5000&shop=sableyeShiny&gems=4')).toEqual({ place: 'cave', level: 1, alt: null, depth: 0, floor: 2, mon: 'charmander', coins: 5000, gems: 4, shop: 'sableyeShiny', lab: null, maze: false, inside: false, biome: null })
+  })
+
+  it('reads an AltCave and its depth', () => {
+    expect(parseDebug('?debug=cave&alt=tour&depth=3')).toMatchObject({ place: 'cave', alt: 'tour', depth: 3 })
+    expect(parseDebug('?debug=cave&alt=nope&depth=9')).toMatchObject({ alt: null, depth: 4 })
   })
 
   it('reads the cave’s level, from 1 to 5', () => {
@@ -17,6 +22,6 @@ describe('parseDebug', () => {
   })
 
   it('drops unknown places and bad numbers', () => {
-    expect(parseDebug('?debug=nowhere&floor=-3&coins=abc')).toEqual({ place: null, level: 1, floor: 0, mon: null, coins: 0, gems: 0, shop: null, lab: null, maze: false, inside: false, biome: null })
+    expect(parseDebug('?debug=nowhere&floor=-3&coins=abc')).toEqual({ place: null, level: 1, alt: null, depth: 0, floor: 0, mon: null, coins: 0, gems: 0, shop: null, lab: null, maze: false, inside: false, biome: null })
   })
 })
