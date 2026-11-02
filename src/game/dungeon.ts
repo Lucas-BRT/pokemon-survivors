@@ -3,6 +3,7 @@ import type { Poly, Pt } from '../data/arenas'
 import * as dm from '../engine/dmath'
 import { CAVE_GEN } from '../data/procgen'
 import { CAVE_SHOP } from '../data/caveShop'
+import { caveLevel, type CaveLevel } from '../data/caveLevels'
 
 /**
  * Mystery Dungeon floors (the cave, `cave.ts`): rooms on a grid joined by
@@ -34,6 +35,8 @@ export type DungeonFloor = {
   prizes: readonly Pt[]
   /** How many grid cells each room takes: 1 for the regular size, 2 for a 2×1, 4 for a 2×2, 9 for a 3×3… */
   sizes: readonly number[]
+  /** Where hidden traps lie (a telegraphed rockfall when stepped on): the deeper cave levels only, none otherwise. */
+  traps: readonly Pt[]
   /** The Cristalário's room (`CAVE_SHOP`): crystals all round, a peaceful dweller in the middle, no ambush; -1 for none (the older floors). */
   sanctuary: number
 }
@@ -214,7 +217,7 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
   const items = scatter(DUNGEON.items, others, 40, (r) => spotIn(rng, r, 18))
   const crystals = scatter(Math.ceil(rooms.length / 2), all, 50, (r) => cornerIn(rng, r))
   const rocks = scatter(rooms.length, others, 36, (r) => spotIn(rng, r, 26))
-  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush: [], prizes: [], sizes: rooms.map(() => 1), sanctuary: -1 }
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush: [], prizes: [], sizes: rooms.map(() => 1), sanctuary: -1, traps: [] }
 }
 
 /**
@@ -227,9 +230,11 @@ export const generateFloor = (rng: Rng, index: number): DungeonFloor => {
  * same rng gives the same floor. Same shape as `generateFloor`, so the
  * walkers' steering (`dungeonNav`) and the art work as they are.
  */
-export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
+export const generateFloorV2 = (rng: Rng, index: number, lv: CaveLevel = caveLevel(1)): DungeonFloor => {
   const k = Math.min(index, CAVE_GEN.grids.length - 1)
-  const grid = CAVE_GEN.grids[k]!
+  // A deeper level widens the grid, a column then a row in turn.
+  const base = CAVE_GEN.grids[k]!
+  const grid = { cols: base.cols + Math.ceil(lv.grid / 2), rows: base.rows + Math.floor(lv.grid / 2) }
   const { w: CW, h: CH } = CAVE_GEN.cell
   const { gap } = CAVE_GEN
   const total = grid.cols * grid.rows
@@ -245,7 +250,7 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
     for (const cell of cellsOf(b)) owner[cell] = blocks.length - 1
   }
   const shapes = CAVE_GEN.shapes[k]!
-  const wanted = CAVE_GEN.big[k]!
+  const wanted = CAVE_GEN.big[k]! + lv.big
   for (let tries = 0, made = 0, used = 0; tries < wanted * 12 && made < wanted; tries++) {
     const [w, h] = shapes[Math.floor(rng() * shapes.length)]!
     const b = { c: Math.floor(rng() * grid.cols), r: Math.floor(rng() * grid.rows), w, h }
@@ -405,7 +410,7 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
     const j = Math.floor(rng() * (i + 1))
     ;[bigs[i], bigs[j]] = [bigs[j]!, bigs[i]!]
   }
-  const ambush = bigs.sort((a, b) => sizes[b]! - sizes[a]!).slice(0, CAVE_GEN.ambush[k]!)
+  const ambush = bigs.sort((a, b) => sizes[b]! - sizes[a]!).slice(0, CAVE_GEN.ambush[k]! + lv.ambush)
   // A prize for whoever clears it, more in a bigger room.
   const prizes = ambush.flatMap((i) => Array.from({ length: 1 + (sizes[i]! >= 4 ? 1 : 0) + (sizes[i]! >= 6 ? 1 : 0) }, (): Pt => spotIn(rng, rooms[i]!, 26)))
 
@@ -426,8 +431,8 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
   const all = rooms.map((_, i) => i)
   const others = all.filter((i) => i !== startRoom && i !== sanctuary)
   const plain = others.filter((i) => !ambush.includes(i))
-  const items = scatter(CAVE_GEN.items[k]!, plain.length > 0 ? plain : others, 40, (r) => spotIn(rng, r, 18))
-  const crystals = scatter(Math.ceil(rooms.length / 4), all.filter((i) => i !== sanctuary), 50, (r) => cornerIn(rng, r))
+  const items = scatter(CAVE_GEN.items[k]! + lv.items, plain.length > 0 ? plain : others, 40, (r) => spotIn(rng, r, 18))
+  const crystals = scatter(Math.max(3, Math.ceil((rooms.length / 4) * lv.crystals)), all.filter((i) => i !== sanctuary), 50, (r) => cornerIn(rng, r))
   if (sanctuary >= 0) {
     // Ringed by crystals, the middle left for the dweller: the four corners and the middle of the two sides.
     const r = rooms[sanctuary]!
@@ -455,10 +460,12 @@ export const generateFloorV2 = (rng: Rng, index: number): DungeonFloor => {
       crystals.push(across ? [along, ay + off] : [ax + off, along])
     }
   }
+  // Hidden traps in the regular rooms and the ones ambush packs spare, never the start's, the stairs' or the Cristalário's.
+  const traps = scatter(lv.traps, plain.length > 0 ? plain : others, 56, (r) => spotIn(rng, r, 30))
   const cover = rooms.length + sizes.reduce((a, s) => a + (s - 1), 0)
   const rocks = scatter(cover, others, 36, (r) => spotIn(rng, r, 26))
   void dist
-  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush, prizes, sizes, sanctuary }
+  return { rooms, links, start, stairs, startRoom, stairsRoom, items, crystals, rocks, ambush, prizes, sizes, sanctuary, traps }
 }
 
 /**

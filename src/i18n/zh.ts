@@ -2350,6 +2350,9 @@ export const zh: Messages = {
       sky: '在風平息之前，抓住風帶來的*羽毛*！',
     },
     floor: (n) => `B${n}F`,
+    /** A cave's level (1 to 5, `data/caveLevels.ts`): its tag and the name of each. */
+    level: (n) => `等級 ${n}`,
+    levelNames: ['淺層', '普通', '深層', '危險', '深淵'] as readonly string[],
     wind: ['有什麼東西在騷動…', '越來越近了！', '就在附近！風越颳越強！'],
     blownOut: '一陣強風把你吹出了洞窟！',
     monsterHouse: '是*怪物屋*！',

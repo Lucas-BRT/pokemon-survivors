@@ -654,10 +654,26 @@ export const drawEntranceAir = (ctx: Ctx, g: Game, t: number) => {
   drawUpdraft(ctx, ent, t)
 }
 
+/** The color of each level's gems over a cave's mouth. */
+const LEVEL_COLORS = ['#a8d8f8', '#f8e070', '#f8a838', '#f06048', '#c868f0'] as const
+
 const drawCaveMouth = (ctx: Ctx, ent: PlaceEntrance, t: number) => {
   const x = Math.round(ent.x)
   const y = Math.round(ent.y - 6)
   if (!ent.open) return blitCentered(ctx, ROCKFALL(), x, y - 4)
+  // Its level, as that many gems over the mouth: the deeper the cave, the more of them and the warmer their color (they blink from level 4).
+  const color = LEVEL_COLORS[ent.level - 1]!
+  for (let i = 0; i < ent.level; i++) {
+    const gx = x + Math.round((i - (ent.level - 1) / 2) * 8)
+    const gy = y - 40 + Math.round(Math.sin(t * 2 + i) * 1)
+    ctx.fillStyle = '#181018'
+    ctx.fillRect(gx - 2, gy - 1, 5, 3)
+    ctx.fillRect(gx - 1, gy - 2, 3, 5)
+    ctx.fillStyle = ent.level >= 4 && Math.floor(t * 4 + i) % 2 === 0 ? '#ffffff' : color
+    ctx.fillRect(gx - 1, gy - 1, 3, 3)
+    ctx.fillRect(gx, gy - 2, 1, 5)
+    ctx.fillRect(gx - 2, gy, 5, 1)
+  }
   // Dust drifting out of the dark.
   for (let i = 0; i < 4; i++) {
     const k = (t * 0.4 + i / 4) % 1

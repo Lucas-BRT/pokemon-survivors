@@ -2352,6 +2352,9 @@ export const en: Messages = {
       sky: 'Grab the *wings* the wind brings before it calms!',
     },
     floor: (n) => `B${n}F`,
+    /** A cave's level (1 to 5, `data/caveLevels.ts`): its tag and the name of each. */
+    level: (n) => `Lv ${n}`,
+    levelNames: ['Shallow', 'Common', 'Deep', 'Perilous', 'Abyssal'] as readonly string[],
     wind: ['Something’s stirring…', 'It’s getting closer!', 'It’s right nearby! It’s gusting hard!'],
     blownOut: 'A gust of wind blew you out of the cave!',
     monsterHouse: 'It’s a *Monster House*!',

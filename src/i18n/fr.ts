@@ -2350,6 +2350,9 @@ export const fr: Messages = {
       sky: 'Attrape les *plumes* que le vent apporte avant qu’il ne se calme !',
     },
     floor: (n) => `SS${n}`,
+    /** A cave's level (1 to 5, `data/caveLevels.ts`): its tag and the name of each. */
+    level: (n) => `Niv ${n}`,
+    levelNames: ['Peu profonde', 'Commune', 'Profonde', 'Périlleuse', 'Abyssale'] as readonly string[],
     wind: ['Quelque chose bouge…', 'Ça se rapproche !', 'C’est tout près ! Ça souffle fort !'],
     blownOut: 'Une rafale de vent t’a éjecté de la grotte !',
     monsterHouse: 'C’est une *Maison des Monstres* !',

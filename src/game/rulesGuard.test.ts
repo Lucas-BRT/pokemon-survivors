@@ -274,7 +274,7 @@ const PINNED: Partial<Record<number, Record<ScenarioId, string>>> = {
     sketch: '1210·20·2·e776249d',
     legend: '1100·51·14·cdbdb688',
     waveLegend: '1998·14·17·1fa0f40a',
-    cave: '2183·4·12·6346753c',
+    cave: '2183·5·12·f422894d',
     magicGuard: '1188·29·19·fddbed17',
   },
 }

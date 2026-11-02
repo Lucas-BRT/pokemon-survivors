@@ -1,4 +1,5 @@
 import { CAVE_NPC_IDS, CAVE_NPCS, CAVE_SHOP, WARES, type CaveNpcId, type WareId, type WareKind } from '../data/caveShop'
+import { caveLevel } from '../data/caveLevels'
 import { EVO_ITEM_IDS, type EvoItemId } from '../data/shop'
 import { chance } from '../engine/rng'
 import type { Rng } from '../engine/rng'
@@ -20,11 +21,11 @@ import type { Game, Offer } from './types'
  */
 
 /** One floor's dweller and what's been sold. */
-export type CaveShop = { npc: CaveNpcId; x: number; y: number; stand: number; sold: WareId[] }
+export type CaveShop = { npc: CaveNpcId; level: number; x: number; y: number; stand: number; sold: WareId[] }
 
 /** Draws a floor's dweller from the run's rng (the shiny Sableye only by `CAVE_SHOP.shinyChance`, from `shinyFrom`). */
-export const drawNpc = (rng: Rng, floor: number): CaveNpcId => {
-  if (floor >= CAVE_SHOP.shinyFrom && chance(rng, CAVE_SHOP.shinyChance)) return 'sableyeShiny'
+export const drawNpc = (rng: Rng, floor: number, bonus = 0): CaveNpcId => {
+  if (floor >= CAVE_SHOP.shinyFrom && chance(rng, CAVE_SHOP.shinyChance + bonus)) return 'sableyeShiny'
   return CAVE_NPC_IDS[Math.floor(rng() * CAVE_NPC_IDS.length)]!
 }
 
@@ -46,9 +47,9 @@ export const shopOffers = (g: Game, shop: CaveShop): Offer[] => {
   const stones = shop.npc === 'sableyeShiny'
   const ids: WareId[] = stones
     ? missingEvoItems(g).filter((id) => EVO_ITEM_IDS.includes(id)).slice(0, CAVE_SHOP.stone.stones).map((id): WareId => `stone:${id}`)
-    : [...npc.stock]
+    : [...npc.stock, ...(['rareCandy', 'revive', 'superPotion'] as const).filter((id) => !(npc.stock as readonly WareKind[]).includes(id)).slice(0, caveLevel(shop.level).reward.wares)]
   // A stone seller whose customer needs none still has the regular Sableye's things.
-  const wares = (stones && ids.length === 0 ? [...CAVE_NPCS.sableye.stock] : ids).filter((id) => !shop.sold.includes(id)).slice(0, CAVE_SHOP.offers)
+  const wares = (stones && ids.length === 0 ? [...CAVE_NPCS.sableye.stock] : ids).filter((id) => !shop.sold.includes(id)).slice(0, CAVE_SHOP.offers + caveLevel(shop.level).reward.wares)
   return [...wares.map((id) => offerOf(g, id)), { kind: 'pass' }]
 }
 

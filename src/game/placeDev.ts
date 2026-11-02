@@ -1,4 +1,5 @@
-import { CAVE, GRAVEYARD, PLACE_IDS, type PlaceId } from '../data/places'
+import { caveLevel } from '../data/caveLevels'
+import { GRAVEYARD, PLACE_IDS, type PlaceId } from '../data/places'
 import { descendCave } from './cave'
 import { openEntrance } from './placeEntrance'
 import { enterPlace } from './placeInterior'
@@ -16,16 +17,16 @@ export const placeDevTools = (game: () => Game | undefined) => {
   const known = (id: PlaceId | undefined) => id === undefined || PLACE_IDS.includes(id)
   return {
     /** Opens a place's entrance 70 px to the right of the player (`ps.place('graveyard')`; the director's pick without an argument). */
-    place: (id?: PlaceId) =>
-      known(id) ? playing((g) => openEntrance(g, id, { x: Math.round(g.player.x + 70), y: Math.round(g.player.y) })) : `Places: ${PLACE_IDS.join(', ')}`,
+    place: (id?: PlaceId, level?: number) =>
+      known(id) ? playing((g) => openEntrance(g, id, { x: Math.round(g.player.x + 70), y: Math.round(g.player.y) }, level)) : `Places: ${PLACE_IDS.join(', ')}`,
     /** Steps straight into a place (`ps.enter('sky')` works for any Pokémon). */
-    enter: (id: PlaceId) => (known(id) ? playing((g) => enterPlace(g, id, Math.round(g.player.x), Math.round(g.player.y))) : `Places: ${PLACE_IDS.join(', ')}`),
+    enter: (id: PlaceId, level?: number) => (known(id) ? playing((g) => enterPlace(g, id, Math.round(g.player.x), Math.round(g.player.y), level)) : `Places: ${PLACE_IDS.join(', ')}`),
     /** In the cave, takes the stairs now (`ps.floor()`), as many times as given; the last floor is the treasure chamber. */
     floor: (times = 1) =>
       playing((g) => {
         for (let i = 0; i < times; i++) {
           const inside = g.place.inside
-          if (inside?.id !== 'cave' || inside.state.floor >= CAVE.floors) break
+          if (inside?.id !== 'cave' || inside.state.floor >= caveLevel(inside.state.level).floors) break
           descendCave(g, inside)
         }
         return g.place.inside?.id === 'cave' ? g.place.inside.state.floor : 'ps: not in the cave'

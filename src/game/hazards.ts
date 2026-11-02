@@ -91,6 +91,9 @@ const STRIKE_WINDOW = 0.15
 const strike = (g: Game, x: number, y: number, r: number, delay: number, visual: Hazard['visual'], damage: number) =>
   spawn(g, { kind: 'strike', visual, x, y, r, damage, armAt: delay, disarmAt: delay + STRIKE_WINDOW, ttl: delay + 0.45 })
 
+/** A cave trap going off under whoever stepped on it: one telegraphed rockfall of the world's own damage (`CaveLevel.traps`). */
+export const trapStrike = (g: Game, x: number, y: number) => strike(g, x, y, 15, hazardTelegraph(g.difficulty), 'rock', hazardDamage(g.difficulty, g.time))
+
 const zonesAlive = (g: Game) => {
   let n = 0
   for (const h of g.hazards) if (h.world && h.kind === 'zone') n++

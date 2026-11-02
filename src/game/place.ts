@@ -22,7 +22,7 @@ export type PlaceOutcome = 'done' | 'timeout' | 'fallen'
 /** What the shell hears about a place (sounds, toasts, the dungeon's title card), carried by the `place` GameEvent. */
 export type PlaceNotice =
   /** An entrance appeared on the map (it gets an arrow), or closed unused. */
-  | { kind: 'open' }
+  | { kind: 'open'; /** The cave's level, when it is a cave. */ level?: number }
   | { kind: 'sealed' }
   /** Someone who isn't a Flying type stood in the updraft. */
   | { kind: 'blocked' }
@@ -50,7 +50,7 @@ export type PlaceNotice =
   | { kind: 'exit'; outcome: PlaceOutcome }
 
 /** An entrance on the map: open until `left` runs out, `charge` counts the seconds the player has stood in its door. */
-export type PlaceEntrance = { id: PlaceId; x: number; y: number; left: number; charge: number; open: boolean; terrain: Feature }
+export type PlaceEntrance = { id: PlaceId; x: number; y: number; left: number; charge: number; open: boolean; terrain: Feature; /** The cave's level (1 to 5, `data/caveLevels.ts`), drawn when it opens; 1 for the other places. */ level: number }
 
 /** Each place's own state inside. */
 export type PlaceStates = { cave: CaveState; graveyard: GraveyardState; sky: SkyState }

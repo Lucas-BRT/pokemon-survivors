@@ -16,7 +16,7 @@ const insidePill = (g: Game): Pill => {
   const urgent = inside.left < 10
   switch (inside.id) {
     case 'cave':
-      return { text: m.hudCave(m.floor(inside.state.floor + 1), time), kind: 'place', urgent }
+      return { text: m.hudCave(`${m.level(inside.state.level)} ${m.floor(inside.state.floor + 1)}`, time), kind: 'place', urgent }
     case 'graveyard': {
       const s = inside.state
       return { text: s.bossId === null ? m.hudSpirits(s.spirits, GRAVEYARD.spirits, time) : m.hudDawn(time), kind: 'place', urgent }
@@ -46,7 +46,7 @@ const pillFor = (g: Game): Pill => {
   const ent = g.place.entrance
   if (ent?.open) {
     const p = t().places
-    return { text: p.hudOpen(p.hudNames[ent.id], formatTime(Math.ceil(ent.left))), kind: 'place', urgent: ent.left < 8 }
+    return { text: p.hudOpen(ent.id === 'cave' ? `${p.hudNames.cave} ${p.level(ent.level)}` : p.hudNames[ent.id], formatTime(Math.ceil(ent.left))), kind: 'place', urgent: ent.left < 8 }
   }
   const s = g.endless
   if (!s) return null

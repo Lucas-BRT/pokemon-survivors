@@ -20,11 +20,11 @@ import * as dm from '../engine/dmath'
  * at the entrance's door, with the world exactly as it was.
  */
 
-type Built<K extends PlaceId> = { layout: FloorPlan; solids: Solid[]; start: Pt; state: PlaceStates[K]; intro?: number }
+type Built<K extends PlaceId> = { layout: FloorPlan; solids: Solid[]; start: Pt; state: PlaceStates[K]; intro?: number; /** Seconds on the place's clock when it differs from the place's default (a deeper cave's wind blows sooner). */ left?: number }
 
 type PlaceRule<K extends PlaceId> = {
   /** Lays the place out around world (x, y): its floor, scenery, where the player starts and its state. */
-  build: (g: Game, x: number, y: number) => Built<K>
+  build: (g: Game, x: number, y: number, level: number) => Built<K>
   /** Every tick inside until the goal is reached: spawns, the goal, the warnings. */
   update: (g: Game, inside: PlaceInteriorOf<K>, dt: number) => void
   /** Walkers keep to the floor too (the cave's walls), not just the player. */
@@ -45,10 +45,10 @@ const PLACE_RULES: { [K in PlaceId]: PlaceRule<K> } = {
 const EXIT_STEP = 16
 
 /** Sends the team into place `id`, laid out around the entrance's door at (x, y). */
-export const enterPlace = <K extends PlaceId>(g: Game, id: K, x: number, y: number) => {
+export const enterPlace = <K extends PlaceId>(g: Game, id: K, x: number, y: number, level = g.place.entrance?.id === id ? g.place.entrance.level : 1) => {
   const rule: PlaceRule<K> = PLACE_RULES[id]
   const stash = setAside(g)
-  const built = rule.build(g, x, y)
+  const built = rule.build(g, x, y, level)
   placeTeam(g, x + built.start[0], y + built.start[1])
   for (const p of g.players) centerScreen(g, p, p.x, p.y)
   const inside: PlaceInteriorOf<K> = {
@@ -58,7 +58,7 @@ export const enterPlace = <K extends PlaceId>(g: Game, id: K, x: number, y: numb
     layout: built.layout,
     terrain: { solids: built.solids, lake: null },
     age: 0,
-    left: PLACES[id].time,
+    left: built.left ?? PLACES[id].time,
     intro: built.intro ?? 0,
     loot: null,
     fall: null,

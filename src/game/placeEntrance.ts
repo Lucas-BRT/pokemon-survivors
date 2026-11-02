@@ -1,5 +1,6 @@
+import { drawCaveLevel } from '../data/caveLevels'
 import { retain, TAU } from '../engine/math'
-import { range } from '../engine/rng'
+import { createRng, range } from '../engine/rng'
 import { ENTRANCE_PIECES, PLACE, PLACE_FEET, PLACES, type PlaceDef, type PlaceId } from '../data/places'
 import { DIRECTOR } from './mapEventRules'
 import { chargePortal } from './rift'
@@ -41,7 +42,7 @@ const entranceSpot = (g: Game) => {
 }
 
 /** Opens place `id`'s entrance at (x, y), or at a free spot past the screen's edge; tries again shortly if there's none. */
-export const openEntrance = (g: Game, id: PlaceId = pickPlace(g.rng, { offered: g.place.offered, biome: g.biome.id, flyer: teamFlies(g) }), at?: { x: number; y: number }) => {
+export const openEntrance = (g: Game, id: PlaceId = pickPlace(g.rng, { offered: g.place.offered, biome: g.biome.id, flyer: teamFlies(g) }), at?: { x: number; y: number }, level?: number) => {
   const spot = at ?? entranceSpot(g)
   if (!spot) {
     g.place.nextAt = g.time + 3
@@ -49,13 +50,13 @@ export const openEntrance = (g: Game, id: PlaceId = pickPlace(g.rng, { offered: 
   }
   const { x, y } = spot
   const solids = ENTRANCE_PIECES[id].map(([piece, dx, dy], i) => solidAt(piece, PLACE_FEET[piece], x + dx, y + dy, i))
-  g.place.entrance = { id, x, y, left: PLACE.openTime, charge: 0, open: true, terrain: { solids, lake: null } }
+  g.place.entrance = { id, x, y, left: PLACE.openTime, charge: 0, open: true, terrain: { solids, lake: null }, level: level ?? (id === 'cave' ? drawCaveLevel(createRng(dm.round(g.terrain.seed + g.time * 7 + g.place.offered.length * 131)), g.time) : 1) }
   g.place.offered.push(id)
   g.place.nextAt = nextPlaceAt(g.place.nextAt, g.time, g.rng)
   // Breakables that stood where the entrance now is make room for it.
   const feet = solids.flatMap((s) => s.foot)
   retain(g.props, (pr) => !feet.some((e) => dm.sq((pr.x - e.x) / (e.rx + 8)) + dm.sq((pr.y - e.y) / (e.ry + 8)) < 1))
-  notifyPlace(g, id, { kind: 'open' })
+  notifyPlace(g, id, id === 'cave' ? { kind: 'open', level: g.place.entrance.level } : { kind: 'open' })
   return g.place.entrance
 }
 

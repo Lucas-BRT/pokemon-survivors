@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { caveLevel, drawCaveLevel } from '../data/caveLevels'
+import { createRng } from '../engine/rng'
 import { CAVE } from '../data/places'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { descendCave, updateCave } from './cave'
@@ -23,9 +25,9 @@ const play = (g: Game, seconds: number) => {
 }
 
 /** A run standing in a cave's first floor (the dungeon is laid out around the world's origin). */
-const inCave = (seed = 5) => {
+const inCave = (seed = 5, level = 1) => {
   const g: Game = createGame('charmander', { w: 480, h: 270 }, seed)
-  enterPlace(g, 'cave', 0, 0)
+  enterPlace(g, 'cave', 0, 0, level)
   const inside = g.place.inside
   if (inside?.id !== 'cave') throw new Error('not in the cave')
   return { g, inside }
@@ -43,7 +45,7 @@ describe.skipIf(!PROCGEN.cave)('the generated cave at play', () => {
     descendCave(g, inside)
     expect(inside.left).toBe(CAVE_GEN.floorTime[2])
     descendCave(g, inside)
-    expect(inside.state.floor).toBe(CAVE.floors)
+    expect(inside.state.floor).toBe(caveLevel(1).floors)
     expect(inside.left).toBe(CAVE_GEN.chamberTime)
   })
 
@@ -224,5 +226,45 @@ describe.skipIf(!PROCGEN.cave)('the cave’s crystals', () => {
     expect(inside.state.touched.map((c) => c.i)).toContain(0)
     updateCave(g, inside, blink + 1)
     expect(inside.state.touched).toEqual([])
+  })
+
+  it('grows with its level: more floors, bigger floors, a shorter clock, hidden traps and a richer chest', () => {
+    const shallow = inCave(5, 1)
+    const deep = inCave(5, 5)
+    expect(caveLevel(5).floors).toBeGreaterThan(caveLevel(1).floors)
+    expect(deep.inside.left).toBeLessThan(shallow.inside.left)
+    expect(deep.inside.state.plan!.rooms.length).toBeGreaterThan(shallow.inside.state.plan!.rooms.length)
+    expect(shallow.inside.state.traps).toHaveLength(0)
+    expect(deep.inside.state.traps).toHaveLength(caveLevel(5).traps)
+    for (let i = 0; i < caveLevel(5).floors; i++) descendCave(deep.g, deep.inside)
+    expect(deep.inside.state.floor).toBe(caveLevel(5).floors)
+    expect(deep.inside.state.chest).not.toBeNull()
+    const before = deep.g.pickups.length
+    deep.inside.state.house = true
+    Object.assign(deep.g.player, { x: deep.inside.x + deep.inside.state.chest!.x, y: deep.inside.y + deep.inside.state.chest!.y })
+    for (let i = 0; i < 120; i++) updateCave(deep.g, deep.inside, TICK)
+    expect(deep.inside.state.chest!.open).toBe(true)
+    expect(deep.g.pickups.length - before).toBeGreaterThan(8)
+  })
+
+  it('springs a hidden trap once, as a rockfall under whoever stepped on it', () => {
+    const { g, inside } = inCave(5, 3)
+    const trap = inside.state.traps[0]!
+    Object.assign(g.player, { x: inside.x + trap.x, y: inside.y + trap.y })
+    const before = g.hazards.length
+    updateCave(g, inside, TICK)
+    expect(trap.done).toBe(true)
+    expect(g.hazards.length).toBe(before + 1)
+    updateCave(g, inside, TICK)
+    expect(g.hazards.length).toBe(before + 1)
+  })
+
+  it('draws a level for an entrance from the time of the run: only the shallow ones early', () => {
+    for (let seed = 1; seed < 40; seed++) {
+      const early = drawCaveLevel(createRng(seed), 60)
+      expect(early).toBe(1)
+    }
+    const deep = Array.from({ length: 200 }, (_, i) => drawCaveLevel(createRng(i + 1), 1500))
+    expect(Math.max(...deep)).toBeGreaterThanOrEqual(4)
   })
 })

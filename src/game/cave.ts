@@ -4,6 +4,7 @@ import type { Circle, FloorPlan, Pt } from '../data/arenas'
 import { DROP_TABLES, rollDrop } from '../data/consumables'
 import { CAVE, PLACE_FEET, PLACE_LOOT } from '../data/places'
 import { CAVE_SHOP } from '../data/caveShop'
+import { CAVE_TRAP, caveLevel } from '../data/caveLevels'
 import { CAVE_GEN, PROCGEN } from '../data/procgen'
 import { spawnAlpha } from './alphas'
 import { levelOf, levelsOf } from './caveLevel'
@@ -11,6 +12,7 @@ import { drawNpc, openShop, type CaveShop } from './caveShop'
 import { dropItem } from './consumables'
 import { floorShapes, generateFloor, generateFloorV2, roomAt, type DungeonFloor, type Rect } from './dungeon'
 import { burst, shakeScreen } from './effects'
+import { trapStrike } from './hazards'
 import { spawnEnemy } from './enemies'
 import { chestCoins } from './mapEventRules'
 import { COIN_VALUES } from './meta'
@@ -31,7 +33,9 @@ import * as dm from '../engine/dmath'
  */
 
 export type CaveState = {
-  /** 0 is B1F; at `CAVE.floors` the treasure chamber. */
+  /** The cave's level (1 to 5, `data/caveLevels.ts`): how many floors it has, how deadly it is and how rich. */
+  level: number
+  /** 0 is B1F; at the level's `floors` the treasure chamber. */
   floor: number
   /** The floor's layout, null in the treasure chamber. */
   plan: DungeonFloor | null
@@ -56,6 +60,8 @@ export type CaveState = {
   fortune: boolean
   /** Crystals (indices into `lights`) a player touched, seconds they still shine (kept full while a foot stays on them) and since when they've been lit (`CAVE.crystal`): their glow and the light they give their room (`render/caveSight.ts`). */
   touched: Array<{ i: number; left: number; age: number }>
+  /** The floor's hidden traps (`DungeonFloor.traps`) and whether each has gone off. */
+  traps: Array<{ x: number; y: number; done: boolean }>
 }
 
 type CaveInside = PlaceInteriorOf<'cave'>
@@ -80,8 +86,9 @@ export const stagePlan = (plan: DungeonFloor | null) => {
   staged = plan
 }
 
-const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
-  if (index >= CAVE.floors) {
+const layFloor = (g: Game, x: number, y: number, index: number, level: number): Floor => {
+  const lv = caveLevel(level)
+  if (index >= lv.floors) {
     const lights = Array.from({ length: CHAMBER.crystals }, (_, i): Pt => {
       const a = -Math.PI / 2 + ((i + 0.5) / CHAMBER.crystals) * TAU
       return [dm.round(dm.cos(a) * (CHAMBER.r - 16)), dm.round(dm.sin(a) * (CHAMBER.r - 16) * 0.9)]
@@ -101,7 +108,7 @@ const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
       shop: null,
     }
   }
-  const plan = staged ?? (PROCGEN.cave ? generateFloorV2(g.rng, index) : generateFloor(g.rng, index))
+  const plan = staged ?? (PROCGEN.cave ? generateFloorV2(g.rng, index, lv) : generateFloor(g.rng, index))
   staged = null
   plan.items.forEach(([ix, iy], i) => {
     if (i === 0) dropCoins(g, x + ix, y + iy, [COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[0], COIN_VALUES[0]])
@@ -110,12 +117,12 @@ const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
   })
   // An ambush room's prize: a pile of ₽ and something from an item ball, for whoever dares.
   for (const [px, py] of plan.prizes) {
-    dropCoins(g, x + px, y + py, [COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[0]])
-    dropItem(g, x + px + 12, y + py, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
-    for (let i = 0; i < CAVE_SHOP.gemsPerPrize; i++) dropPickup(g, x + px - 12 + i * 8, y + py + 6, 'gem')
+    dropCoins(g, x + px, y + py, [COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[1], COIN_VALUES[0], ...Array.from({ length: lv.reward.coins }, () => COIN_VALUES[1])])
+    for (let i = 0; i <= lv.reward.items; i++) dropItem(g, x + px + 12 + i * 8, y + py - i * 4, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
+    for (let i = 0; i < CAVE_SHOP.gemsPerPrize + lv.reward.gems; i++) dropPickup(g, x + px - 12 + i * 8, y + py + 6, 'gem')
   }
   const sanctuary = plan.sanctuary >= 0 ? plan.rooms[plan.sanctuary]! : null
-  const shop: CaveShop | null = sanctuary ? { npc: drawNpc(g.rng, index), x: dm.round(sanctuary.x + sanctuary.w / 2), y: dm.round(sanctuary.y + sanctuary.h / 2) + 6, stand: 0, sold: [] } : null
+  const shop: CaveShop | null = sanctuary ? { npc: drawNpc(g.rng, index, lv.reward.shiny), level, x: dm.round(sanctuary.x + sanctuary.w / 2), y: dm.round(sanctuary.y + sanctuary.h / 2) + 6, stand: 0, sold: [] } : null
   return {
     layout: { floor: floorShapes(plan) },
     solids: [
@@ -131,11 +138,11 @@ const layFloor = (g: Game, x: number, y: number, index: number): Floor => {
   }
 }
 
-const stateOf = (f: Floor, floor: number): CaveState => ({ floor, plan: f.plan, stairs: f.stairs, chest: f.chest, lights: f.lights, wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [], visited: f.plan ? [f.plan.startRoom] : [], shop: f.shop, lantern: false, compass: false, fortune: false, touched: [] })
+const stateOf = (f: Floor, floor: number, level: number): CaveState => ({ level, floor, plan: f.plan, stairs: f.stairs, chest: f.chest, lights: f.lights, wind: 0, house: false, ambush: f.plan ? [...f.plan.ambush] : [], sprung: [], visited: f.plan ? [f.plan.startRoom] : [], shop: f.shop, lantern: false, compass: false, fortune: false, touched: [], traps: f.plan ? f.plan.traps.map(([x, y]) => ({ x, y, done: false })) : [] })
 
-export const buildCave = (g: Game, x: number, y: number) => {
-  const f = layFloor(g, x, y, 0)
-  return { layout: f.layout, solids: f.solids, start: f.start, state: stateOf(f, 0), intro: CAVE.card }
+export const buildCave = (g: Game, x: number, y: number, level = 1) => {
+  const f = layFloor(g, x, y, 0, level)
+  return { layout: f.layout, solids: f.solids, start: f.start, state: stateOf(f, 0, level), intro: CAVE.card, left: floorClock(level, 0) }
 }
 
 /**
@@ -149,14 +156,14 @@ export const descendCave = (g: Game, inside: CaveInside) => {
   g.hazards = []
   g.bossId = null
   for (const k of g.pickups) k.attracted = true
-  const f = layFloor(g, inside.x, inside.y, s.floor + 1)
+  const f = layFloor(g, inside.x, inside.y, s.floor + 1, s.level)
   const start = f.start
   inside.layout = f.layout
   inside.terrain = { solids: f.solids, lake: null }
   const next = s.floor + 1
   // The generated cave keeps a clock per floor, and the wind starts over with it.
-  if (PROCGEN.cave) inside.left = next >= CAVE.floors ? CAVE_GEN.chamberTime : CAVE_GEN.floorTime[Math.min(next, CAVE_GEN.floorTime.length - 1)]!
-  inside.state = { ...stateOf(f, next), wind: PROCGEN.cave ? 0 : s.wind }
+  if (PROCGEN.cave) inside.left = next >= caveLevel(s.level).floors ? CAVE_GEN.chamberTime : floorClock(s.level, next)
+  inside.state = { ...stateOf(f, next, s.level), wind: PROCGEN.cave ? 0 : s.wind }
   placeTeam(g, inside.x + start[0], inside.y + start[1])
   const p = anchorPlayer(g)
   for (const k of g.pickups) {
@@ -182,8 +189,11 @@ const inLight = (g: Game, x: number, y: number) => {
 }
 
 /** A spot in the dark: in some room (or around the chamber), past every player's light but close enough to come for one of them (they take turns, `anchorPlayer`). */
+/** The clock of floor `floor` of a cave of `level`, in seconds: a deeper level's wind blows sooner. */
+export const floorClock = (level: number, floor: number) => dm.round(CAVE_GEN.floorTime[Math.min(floor, CAVE_GEN.floorTime.length - 1)]! * caveLevel(level).time)
+
 /** The clock of the floor the team is on, in seconds. */
-const floorTime = (inside: CaveInside) => CAVE_GEN.floorTime[Math.min(inside.state.floor, CAVE_GEN.floorTime.length - 1)]!
+const floorTime = (inside: CaveInside) => floorClock(inside.state.level, inside.state.floor)
 
 const darkSpot = (inside: CaveInside) => (g: Game) => {
   const plan = inside.state.plan
@@ -226,7 +236,7 @@ const springHouse = (g: Game, inside: CaveInside) => {
   inside.state.house = true
   const chest = inside.state.chest
   if (!chest) return
-  const count = CAVE.monsterHouse + Math.floor(g.time / 120)
+  const count = CAVE.monsterHouse + caveLevel(inside.state.level).house + Math.floor(g.time / 120)
   const offset = range(g.rng, 0, TAU)
   const pool = placePool('cave', g.time)
   for (let i = 0; i < count; i++) {
@@ -245,8 +255,9 @@ const springHouse = (g: Game, inside: CaveInside) => {
  * like Onix. They appear clear of whoever stepped in (`by`).
  */
 const springAmbush = (g: Game, inside: CaveInside, room: Rect, cells: number, by: { x: number; y: number }) => {
-  const pack = CAVE_GEN.packs[Math.min(inside.state.floor, CAVE_GEN.packs.length - 1)]!
-  const count = Math.min(CAVE_GEN.packMax, pack.base + pack.perCell * (cells - 1))
+  const lv = caveLevel(inside.state.level)
+  const pack = CAVE_GEN.packs[Math.min(inside.state.floor + lv.packShift, CAVE_GEN.packs.length - 1)]!
+  const count = Math.min(dm.round(CAVE_GEN.packMax * lv.packSize), dm.round((pack.base + pack.perCell * (cells - 1)) * lv.packSize))
   const spot = () => {
     let x = 0
     let y = 0
@@ -264,7 +275,7 @@ const springAmbush = (g: Game, inside: CaveInside, room: Rect, cells: number, by
   const cx = inside.x + room.x + room.w / 2
   const cy = inside.y + room.y + room.h / 2
   const lead = pack.leader
-  if (lead && cells >= lead.minCells) {
+  if (lead && cells >= Math.max(2, lead.minCells - lv.leaderCells)) {
     const boss = lead.alpha ? spawnAlpha(g, lead.kind, cx, cy) : spawnEnemy(g, lead.kind, cx, cy)
     boss.alert = CAVE.sight.ambush
     // The room's leader takes the HP bar, as a wave boss does (it clears when it falls or the team goes down the stairs).
@@ -281,11 +292,15 @@ const openChest = (g: Game, inside: CaveInside, chest: NonNullable<CaveState['ch
   for (const s of inside.terrain.solids) if (s.kind === 'chest') s.variant = 1
   const x = inside.x + chest.x
   const y = inside.y + chest.y
-  const coins = [...chestCoins(g.time), COIN_VALUES[2]]
+  const lv = caveLevel(inside.state.level)
+  const coins = [...chestCoins(g.time), COIN_VALUES[2], ...Array.from({ length: lv.reward.coins }, () => COIN_VALUES[2])]
   dropCoins(g, x, y - 4, coins)
   dropPickup(g, x + 8, y, 'pokeball')
   PLACE_LOOT.cave.forEach((item, i) => dropItem(g, x - 8 + i * 6, y, item))
-  awardEgg(g, 'place', x, y)
+  // The deeper the cave, the more the chest holds: extra Rare Candies and item rolls, and a better egg.
+  for (let i = 0; i < lv.reward.chestCandies; i++) dropItem(g, x - 14 - i * 6, y + 4, PLACE_LOOT.cave[0])
+  for (let i = 0; i < lv.reward.chestItems; i++) dropItem(g, x + 14 + i * 7, y + 4, rollDrop(DROP_TABLES.itemBall, g.time, g.rng))
+  awardEgg(g, lv.reward.egg, x, y)
   burst(g, x, y - 8, { colors: ['#f8d030', '#fff8c0', '#ffffff', '#c08800'], count: 60, speed: 150, ttl: 0.8, gravity: 60 })
   shakeScreen(g, 4, { x, y })
   notifyPlace(g, 'cave', { kind: 'treasure', coins: coins.reduce((a, b) => a + b, 0) })
@@ -349,6 +364,13 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
       shop.stand = 0
     }
   }
+  // A hidden trap goes off under the first player to step on it: a telegraphed rockfall.
+  for (const t of s.traps) {
+    if (t.done || !playerWithin(g, inside.x + t.x, inside.y + t.y, CAVE_TRAP.trigger)) continue
+    t.done = true
+    trapStrike(g, inside.x + t.x, inside.y + t.y)
+    shakeScreen(g, 2, { x: inside.x + t.x, y: inside.y + t.y })
+  }
   // Any player at the stairs takes the team down; any player at the chest opens it.
   const stairs = s.stairs
   if (stairs) {
@@ -364,5 +386,5 @@ export const updateCave = (g: Game, inside: CaveInside, dt: number) => {
     if (chest.progress > before && Math.floor(chest.progress * 5) !== Math.floor(before * 5)) notifyPlace(g, 'cave', { kind: 'chestTick' })
     if (chest.progress >= 1) return openChest(g, inside, chest)
   }
-  spawnInPlace(g, inside, dt, darkSpot(inside), (s.plan ? 1 : 0.3) * (PROCGEN.cave ? 1 + CAVE_GEN.spawnPerFloor * s.floor : 1))
+  spawnInPlace(g, inside, dt, darkSpot(inside), (s.plan ? 1 : 0.3) * (PROCGEN.cave ? 1 + CAVE_GEN.spawnPerFloor * s.floor : 1) * caveLevel(s.level).spawn)
 }

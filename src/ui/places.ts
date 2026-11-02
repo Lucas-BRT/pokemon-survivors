@@ -18,7 +18,7 @@ export const placeFeedback = (root: HTMLElement, place: PlaceId, notice: PlaceNo
   switch (notice.kind) {
     case 'open':
       playSfx('shiny')
-      return runToast(root, 'important', h('span', { class: 'item-toast' }, h('img', { src: placeIcon(place), alt: '' }), rich(m.open[place])), 3400, 'place')
+      return runToast(root, 'important', h('span', { class: 'item-toast' }, h('img', { src: placeIcon(place), alt: '' }), rich(notice.level ? `${m.open[place]} *${m.level(notice.level)} · ${m.levelNames[notice.level - 1]}*` : m.open[place])), 3400, 'place')
     case 'sealed':
       return runToast(root, 'minor', m.sealed[place], 2200, 'place')
     case 'blocked':

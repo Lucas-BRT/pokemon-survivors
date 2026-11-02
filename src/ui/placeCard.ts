@@ -17,7 +17,7 @@ export const createPlaceCard = () => {
     const inside = g.place.inside
     const show = inside?.id === 'cave' && inside.intro > 0
     if (show && inside?.id === 'cave') {
-      setText(name, t().places.names.cave)
+      setText(name, `${t().places.names.cave} · ${t().places.level(inside.state.level)}`)
       setText(floor, t().places.floor(inside.state.floor + 1))
     }
     if (show === shown) return

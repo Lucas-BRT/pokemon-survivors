@@ -16,10 +16,10 @@ import type { Game } from './types'
  * `?debug=cave` starts inside the cave; `&floor=2` takes its stairs that many
  * times, `&mon=charmander` picks the Pokémon, `&coins=5000` and `&gems=6` fill the run's ₽ and gems, and
  * `&shop=sableyeShiny` (a `CAVE_NPCS` id) puts that dweller in the floor's Cristalário and the team beside it.
- * `?debug=maze` walks the run to the nearest hedge maze's first way in (`&biome=snow` first sets its biome, `&in` stands inside it). A bare `?debug` just starts a run. Never ranked:
+ * `&level=4` sets the cave's level (1 to 5). `?debug=maze` walks the run to the nearest hedge maze's first way in (`&biome=snow` first sets its biome, `&in` stands inside it). A bare `?debug` just starts a run. Never ranked:
  * the shell skips the debug runs' banking, and this only runs in dev.
  */
-export type DebugStart = { place: PlaceId | null; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; inside: boolean; biome: BiomeId | null }
+export type DebugStart = { place: PlaceId | null; level: number; floor: number; mon: string | null; coins: number; gems: number; shop: CaveNpcId | null; lab: Lab | null; maze: boolean; inside: boolean; biome: BiomeId | null }
 
 /** The light lab (`&lab=S:C:D`): one room of S times the reference area, C crystals inside it, D in its door tile. */
 export type Lab = { size: number; inside: number; doors: number; vertical: 0 | 1 | 2 }
@@ -70,6 +70,7 @@ export const labPlan = ({ size, inside, doors, vertical }: Lab): DungeonFloor =>
     crystals,
     rocks: [],
     ambush: [],
+    traps: [],
     prizes: [],
     sizes: [size, 1],
     sanctuary: -1,
@@ -85,6 +86,7 @@ export const parseDebug = (search: string): DebugStart | null => {
   const num = (key: string) => Math.max(0, Math.floor(Number(q.get(key))) || 0)
   return {
     place: PLACE_IDS.find((id) => id === place) ?? null,
+    level: Math.max(1, Math.min(5, num('level') || 1)),
     floor: num('floor'),
     mon: q.get('mon'),
     coins: num('coins'),
@@ -123,7 +125,7 @@ export const applyDebug = (g: Game, input: DebugStart) => {
   // `?debug=maze`: just outside the nearest big hedge maze's first way in.
   if (spec.maze) goToMaze(g, spec.inside)
   g.player.gems += spec.gems
-  if (spec.place) enterPlace(g, spec.place, Math.round(g.player.x), Math.round(g.player.y))
+  if (spec.place) enterPlace(g, spec.place, Math.round(g.player.x), Math.round(g.player.y), spec.level)
   // The lab's floor replaces the next one drawn: B2F with a room of the asked size.
   if (spec.lab) stagePlan(labPlan(spec.lab))
   for (let i = 0; i < spec.floor; i++) {

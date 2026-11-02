@@ -2665,6 +2665,9 @@ export const pt = {
     } satisfies Record<PlaceId, string>,
     /** A dungeon floor, as Mystery Dungeon names them (B1F). */
     floor: (n: number) => `B${n}F`,
+    /** A cave's level (1 to 5, `data/caveLevels.ts`): its tag and the name of each. */
+    level: (n: number) => `Nv ${n}`,
+    levelNames: ['Rasa', 'Comum', 'Funda', 'Perigosa', 'Abissal'] as readonly string[],
     /** The wind's three warnings, then the gust. */
     wind: ['Algo está se agitando…', 'Está chegando mais perto!', 'Está bem aqui! O vento está fortíssimo!'],
     blownOut: 'Uma rajada de vento soprou você para fora da caverna!',
