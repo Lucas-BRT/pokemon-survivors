@@ -3,6 +3,7 @@ import { caveLight } from '../game/cave'
 import { levelOf, levelsOf } from '../game/caveLevel'
 import { LIGHT_FIELD } from '../data/lightSources'
 import { atDepth, onSources, type LightSource } from '../game/lightSources'
+import type { SpaceMap } from '../game/spaces'
 import { spaceAt, type DungeonFloor, type Rect } from '../game/dungeon'
 import type { Game } from '../game/types'
 
@@ -105,18 +106,18 @@ export const retune = () => void tuning++
 /** A room's level of light, 0..1 (`lit`): the sources' energy `e` spread over a room of `area` px² (`game/lightSources.ts`). */
 export const roomLevel = (e: number, area: number, floor = 0) => levelOf(e, area, atDepth(lit, floor))
 
-const levelsCache = new WeakMap<DungeonFloor, { key: string; levels: number[] }>()
+const levelsCache = new WeakMap<SpaceMap, { key: string; levels: number[] }>()
 
 /**
- * Every space's level of light on floor `plan` (the rooms first, then the corridors): the sources on in a space count whole, the ones
+ * Every space's level of light on a floor's map (`game/spaces.ts`; the rooms first, then the corridors): the sources on in a space count whole, the ones
  * in a corridor close to a room count `lit.door` of their strength there, less the farther from it. `lit.allOn` counts every source
  * (the lab). `floor` is how far down the cave is: each floor down starts a visited room darker (`atDepth`). Worked out again when the sources on, the floor or the numbers change.
  */
-export const roomLevels = (plan: DungeonFloor, sources: readonly LightSource[], floor = 0): readonly number[] => {
+export const roomLevels = (map: SpaceMap, sources: readonly LightSource[], floor = 0): readonly number[] => {
   const key = `${tuning}:${floor}:${onSources(sources).join(',')}:${lit.allOn}`
-  const known = levelsCache.get(plan)
+  const known = levelsCache.get(map)
   if (known && known.key === key) return known.levels
-  const levels = levelsOf(plan, sources, atDepth(lit, floor), lit.allOn === 1)
-  levelsCache.set(plan, { key, levels })
+  const levels = levelsOf(map, sources, atDepth(lit, floor), lit.allOn === 1)
+  levelsCache.set(map, { key, levels })
   return levels
 }

@@ -1,5 +1,5 @@
-import type { DungeonFloor } from './dungeon'
 import { levelOf, spaceLevels, type LevelNumbers, type LightSource } from './lightSources'
+import type { SpaceMap } from './spaces'
 
 /**
  * How lit a cave room is, from its light sources: the pure rule behind the light the screen draws (`render/caveSight.ts`
@@ -11,5 +11,5 @@ import { levelOf, spaceLevels, type LevelNumbers, type LightSource } from './lig
 export type { LevelNumbers }
 export { levelOf }
 
-/** Each space's level of light on `plan` (the rooms first, then the corridors) with the sources that are on (`all` counts every one). */
-export const levelsOf = (plan: DungeonFloor, sources: readonly LightSource[], n: LevelNumbers, all = false): number[] => spaceLevels(plan, sources, n, all)
+/** Each space's level of light on a floor's map (`game/spaces.ts`; the rooms first, then the corridors) with the sources that are on (`all` counts every one). */
+export const levelsOf = (map: SpaceMap, sources: readonly LightSource[], n: LevelNumbers, all = false): number[] => spaceLevels(map, sources, n, all)

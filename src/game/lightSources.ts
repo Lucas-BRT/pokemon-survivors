@@ -1,15 +1,13 @@
 import { LIGHT_KINDS, type LightKind } from '../data/lightSources'
-import type { DungeonFloor, Rect } from './dungeon'
-import { spaceAt } from './dungeon'
+import { hostOf, spaceSdf, type SpaceMap } from './spaces'
 import * as dm from '../engine/dmath'
 
 /**
  * The cave's light sources, as pure rules (the data is `data/lightSources.ts`, the drawing `render/caveDark.ts`).
  *
- * A *space* is a room (index `s < rooms.length`) or a corridor (`rooms.length + l`, `l` the index into `links`), with a floor
- * area `A_S`. A source is *off* (gives no light at all) or *on* (`e_k = Φ_κ`, its kind's strength). The energy of a space is
+ * A *space* (`game/spaces.ts`) is a region of any shape (a room, a corridor, the treasure chamber…) with a floor area `A_S`. A source is *off* (gives no light at all) or *on* (`e_k = Φ_κ`, its kind's strength). The energy of a space is
  *
- *     E_S = Σ e_k  (sources standing in S)  +  δ · Σ e_k · max(0, 1 − d_kS / ρ)  (sources in a corridor close to the room S)
+ *     E_S = Σ e_k  (sources standing in S)  +  δ · Σ e_k · max(0, 1 − d_kS / ρ)  (sources in a corridor close to the room S, by the signed distance to it)
  *
  * and its level, from `L0` (the floor a visited space starts at) toward `Lmax`, is
  *
@@ -52,108 +50,56 @@ const smooth = (t: number) => {
 export const attenuation = (distance: number, n: RemoteNumbers) =>
   (n.remoteMin + (1 - n.remoteMin) * dm.exp(-distance / n.remoteDecay)) * (1 - smooth((distance - n.remoteReach) / Math.max(1, n.remoteFade)))
 
-/** How many spaces the floor has: its rooms, then its corridors. */
-export const spaceCount = (plan: Pick<DungeonFloor, 'rooms' | 'links'>) => plan.rooms.length + plan.links.length
-
-/** What is left of rectangle `r` once `q` is taken out of it: up to four rectangles that don't overlap `q` (`r` itself when they don't touch). */
-export const subtractRect = (r: Rect, q: Rect): Rect[] => {
-  const x0 = Math.max(r.x, q.x)
-  const y0 = Math.max(r.y, q.y)
-  const x1 = Math.min(r.x + r.w, q.x + q.w)
-  const y1 = Math.min(r.y + r.h, q.y + q.h)
-  if (x0 >= x1 || y0 >= y1) return [r]
-  const out: Rect[] = []
-  if (y0 > r.y) out.push({ x: r.x, y: r.y, w: r.w, h: y0 - r.y })
-  if (y1 < r.y + r.h) out.push({ x: r.x, y: y1, w: r.w, h: r.y + r.h - y1 })
-  if (x0 > r.x) out.push({ x: r.x, y: y0, w: x0 - r.x, h: y1 - y0 })
-  if (x1 < r.x + r.w) out.push({ x: x1, y: y0, w: r.x + r.w - x1, h: y1 - y0 })
-  return out
+/** The nearest of `players` to a space, px (0 when one stands in it): the signed distance to its region, cut at 0. */
+export const playersDistance = (map: SpaceMap, s: number, players: ReadonlyArray<{ x: number; y: number }>) => {
+  let best = Infinity
+  for (const p of players) best = Math.min(best, Math.max(0, spaceSdf(map, s, p.x, p.y)))
+  return best
 }
-
-const corridorCache = new WeakMap<DungeonFloor['links'], Rect[][]>()
 
 /**
- * The floor a corridor really is: its stretches (`Link.rects`, each a segment of the corridor's path widened by the corridor's width, and
- * running half that past both ends so the bends join) *minus the rooms*. The path starts and ends at a point inside each room, so the raw
- * stretches run well into the rooms (a big room's middle is far from its wall); counted whole, a corridor would claim part of every room
- * it opens into: a tint, an area and a distance that are not the corridor's. Clipped to what lies between the rooms, each piece is at
- * most one corridor wide (`DUNGEON.corridor`) and as long as the gap it crosses plus the bend's overlap.
+ * The energy `E_S` of every space of the map from the sources that are on (`all` counts every one: the lab). A source in a corridor
+ * also lights the spaces that open into its corridor (its neighbors through a door), fading with its distance to them.
  */
-const corridorFloor = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, l: number): readonly Rect[] => {
-  let known = corridorCache.get(plan.links)
-  if (!known) corridorCache.set(plan.links, (known = []))
-  let rects = known[l]
-  if (!rects) {
-    rects = plan.links[l]!.rects.flatMap((raw) => plan.rooms.reduce<Rect[]>((pieces, room) => pieces.flatMap((p) => subtractRect(p, room)), [raw])).filter((r) => r.w > 0.5 && r.h > 0.5)
-    known[l] = rects
-  }
-  return rects
-}
-
-/** The rectangles of a space: the room itself, or the floor of the corridor between the rooms (`corridorFloor`). */
-export const spaceRects = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, s: number): readonly Rect[] => (s < plan.rooms.length ? [plan.rooms[s]!] : corridorFloor(plan, s - plan.rooms.length))
-
-/** The floor area of a space, px². */
-export const spaceArea = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, s: number) => spaceRects(plan, s).reduce((a, r) => a + r.w * r.h, 0)
-
-const distToRect = (r: Rect, x: number, y: number) => dm.hypot(Math.max(r.x - x, 0, x - (r.x + r.w)), Math.max(r.y - y, 0, y - (r.y + r.h)))
-
-/** Distance from (x, y) to a space (0 inside it). */
-export const distToSpace = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, s: number, x: number, y: number) => {
-  let best = Infinity
-  for (const r of spaceRects(plan, s)) best = Math.min(best, distToRect(r, x, y))
-  return best
-}
-
-/** The nearest of `players` to a space, px (0 when one stands in it). */
-export const playersDistance = (plan: Pick<DungeonFloor, 'rooms' | 'links'>, s: number, players: ReadonlyArray<{ x: number; y: number }>) => {
-  let best = Infinity
-  for (const p of players) best = Math.min(best, distToSpace(plan, s, p.x, p.y))
-  return best
-}
-
-/** The energy `E_S` of every space of `plan` (rooms, then corridors) from the sources that are on (`all` counts every one: the lab). */
-export const spaceEnergies = (plan: DungeonFloor, sources: readonly LightSource[], n: Pick<LevelNumbers, 'reach' | 'door'>, all = false): number[] => {
-  const energy = Array<number>(spaceCount(plan)).fill(0)
+export const spaceEnergies = (map: SpaceMap, sources: readonly LightSource[], n: Pick<LevelNumbers, 'reach' | 'door'>, all = false): number[] => {
+  const energy = Array<number>(map.spaces.length).fill(0)
   for (const k of sources) {
     if (!all && !k.on) continue
     const e = LIGHT_KINDS[k.kind].strength
-    const host = spaceAt(plan, k.x, k.y)
+    const host = hostOf(map, k.x, k.y)
     if (host >= 0) energy[host]! += e
-    // A source in a corridor also lights the rooms it opens into, fading with the distance to them.
-    if (host >= plan.rooms.length) {
-      for (let s = 0; s < plan.rooms.length; s++) {
-        const d = distToRect(plan.rooms[s]!, k.x, k.y)
-        if (d > 0 && d < n.reach) energy[s]! += n.door * e * (1 - d / n.reach)
-      }
+    if (host < 0 || map.spaces[host]!.kind !== 'corridor') continue
+    for (const s of map.neighbors[host]!) {
+      const d = spaceSdf(map, s, k.x, k.y)
+      if (d > 0 && d < n.reach) energy[s]! += n.door * e * (1 - d / n.reach)
     }
   }
   return energy
 }
 
-/** Every space's level `L_S` (rooms, then corridors), before any distance and whether it was visited. */
-export const spaceLevels = (plan: DungeonFloor, sources: readonly LightSource[], n: LevelNumbers, all = false): number[] =>
-  spaceEnergies(plan, sources, n, all).map((e, s) => levelOf(e, spaceArea(plan, s), n))
+/** Every space's level `L_S`, before any distance and whether it was visited. */
+export const spaceLevels = (map: SpaceMap, sources: readonly LightSource[], n: LevelNumbers, all = false): number[] =>
+  spaceEnergies(map, sources, n, all).map((e, s) => levelOf(e, map.spaces[s]!.area, n))
 
 /** Indices of the sources that are on. */
 export const onSources = (sources: readonly LightSource[]) => sources.flatMap((k, i) => (k.on ? [i] : []))
 
 /**
- * What the players see of every space (rooms, then corridors): `level[S]` is `L̃_S`, and `factor[S]` the `a(D_S)` it came with
- * (the aura of the sources in S is scaled by it too). A visited room is `L0` plus what its sources add over `L0`, weakened by distance:
+ * What the players see of every space: `level[S]` is `L̃_S`, and `factor[S]` the `a(D_S)` it came with (the aura of the sources in S is
+ * scaled by it too). A visited space that has a base (a room, the chamber) is `L0` plus what its sources add over `L0`, weakened by distance:
  *
  *     L̃_S = L0 + (L_S − L0) · a(D_S)
  *
  * so with no source on it is `L0` however far, and inside the space (D = 0) it is `L_S`. A corridor has no base of its own (only what
  * its sources add counts). A space not visited stays 0. `players` are in the floor's own px; `visited(s)` says whether space `s` was.
  */
-export const seenLevels = (plan: DungeonFloor, levels: readonly number[], visited: (space: number) => boolean, players: ReadonlyArray<{ x: number; y: number }>, n: LevelNumbers & RemoteNumbers) => {
+export const seenLevels = (map: SpaceMap, levels: readonly number[], visited: (space: number) => boolean, players: ReadonlyArray<{ x: number; y: number }>, n: LevelNumbers & RemoteNumbers) => {
   const level: number[] = []
   const factor: number[] = []
   levels.forEach((l, s) => {
-    const a = attenuation(playersDistance(plan, s, players), n)
+    const a = attenuation(playersDistance(map, s, players), n)
     factor.push(a)
-    const base = s < plan.rooms.length ? n.floor : 0
+    const base = map.spaces[s]!.base ? n.floor : 0
     level.push(visited(s) ? base + (l - n.floor) * a : 0)
   })
   return { level, factor }

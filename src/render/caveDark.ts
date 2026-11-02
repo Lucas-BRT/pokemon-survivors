@@ -1,13 +1,14 @@
 import { context2d, createCanvas } from '../engine/pixelart'
 import { caveLight } from '../game/cave'
-import { floorShapes, roomAt, spaceAt, type DungeonFloor } from '../game/dungeon'
+import { floorShapes, roomAt, type DungeonFloor } from '../game/dungeon'
 import { LIGHT_KINDS } from '../data/lightSources'
 import { caveLevel } from '../data/caveLevels'
-import { atDepth, onSources, seenLevels, spaceRects } from '../game/lightSources'
+import { atDepth, seenLevels } from '../game/lightSources'
+import { chamberOf, hostOf, regionSdf, spacesOf, type Bounds, type Region, type SpaceMap } from '../game/spaces'
 import { CAVE } from '../data/places'
 import type { PlaceInteriorOf } from '../game/place'
 import type { Game } from '../game/types'
-import { lit, roomLevel, roomLevels } from './caveSight'
+import { lit, roomLevels } from './caveSight'
 
 /**
  * The cave's dark as one scalar field, drawn in a single pass. Every light is a
@@ -69,9 +70,6 @@ const smooth = (t: number) => {
   return k * k * (3 - 2 * k)
 }
 
-/** Distance from (x, y) to the box (0 inside it). */
-const boxDist = (x: number, y: number, x0: number, y0: number, x1: number, y1: number) => Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(y0 - y, 0, y - y1))
-
 type Point = { x: number; y: number; r: number; i: number }
 
 let map: { canvas: HTMLCanvasElement; ctx: Ctx; image: ImageData } | null = null
@@ -86,14 +84,13 @@ const lightmap = (w: number, h: number) => {
 }
 
 /** The spaces' levels as shown now (rooms, then corridors): easing toward their goals (a space not entered is 0). */
-const shownRooms = new WeakMap<DungeonFloor, number[]>()
-const shownChamber = new WeakMap<object, number>()
+const shownSpaces = new WeakMap<SpaceMap, number[]>()
 /** The corridors (space indices) the team has walked, per floor. */
 const corridorsWalked = new WeakMap<DungeonFloor, Set<number>>()
 let lastAt = 0
 
-/** The levels of the spaces as shown now on floor `plan` (rooms, then corridors; absent before the first frame): the minimap reads them too. */
-export const shownLevels = (plan: DungeonFloor): readonly number[] | undefined => shownRooms.get(plan)
+/** The levels of the spaces as shown now on a floor's map (rooms, then corridors; absent before the first frame): the minimap reads them too. */
+export const shownLevels = (map: SpaceMap): readonly number[] | undefined => shownSpaces.get(map)
 
 /**
  * Draws the cave's dark over the world and returns the lights' circles
@@ -110,38 +107,34 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
   // The players in the floor's own px: how far a space is from them says how strongly its light is seen (`seenLevels`).
   const team = g.players.filter((q) => !q.gone).map((q) => ({ x: q.x - inside.x, y: q.y - inside.y }))
 
-  // Area lights: the rooms and the corridors (a rect each, a corridor's stretches sharing a level) or the chamber (a circle), at their eased levels.
-  type Area = { x0: number; y0: number; x1: number; y1: number; level: number } | { cx: number; cy: number; r: number; level: number }
+  // Area lights: every space of the floor (a room, a corridor, the chamber: any shape, `game/spaces.ts`) at its eased level.
+  type Area = { region: Region; bounds: Bounds; level: number }
   const areas: Area[] = []
+  const circle = inside.layout.floor[0]
+  const spaces = plan ? spacesOf(plan) : circle?.kind === 'circle' ? chamberOf(inside.layout, circle) : null
   let factor: readonly number[] = []
   let spaceVisited = (_: number) => true
-  if (plan) {
-    // A corridor counts as entered once a player has stood in it (kept here, for the screen only).
-    let walked = corridorsWalked.get(plan)
-    if (!walked) corridorsWalked.set(plan, (walked = new Set()))
-    for (const q of team) {
-      const space = spaceAt(plan, q.x, q.y)
-      if (space >= plan.rooms.length) walked.add(space)
+  if (spaces) {
+    if (plan) {
+      // A corridor counts as entered once a player has stood in it (kept here, for the screen only).
+      let walked = corridorsWalked.get(plan)
+      if (!walked) corridorsWalked.set(plan, (walked = new Set()))
+      for (const q of team) {
+        const space = hostOf(spaces, q.x, q.y)
+        if (space >= plan.rooms.length) walked.add(space)
+      }
+      spaceVisited = (space) => (space < plan.rooms.length ? s.visited.includes(space) : walked.has(space))
     }
-    spaceVisited = (space) => (space < plan.rooms.length ? s.visited.includes(space) : walked.has(space))
-    const goal = roomLevels(plan, s.sources, s.floor)
-    const seen = seenLevels(plan, goal, spaceVisited, team, atDepth(lit, s.floor))
+    const goal = roomLevels(spaces, s.sources, plan ? s.floor : Math.min(s.floor, caveLevel(s.level).floors - 1))
+    const seen = seenLevels(spaces, goal, spaceVisited, team, atDepth(lit, plan ? s.floor : Math.min(s.floor, caveLevel(s.level).floors - 1)))
     factor = seen.factor
-    let shown = shownRooms.get(plan)
-    if (!shown) shownRooms.set(plan, (shown = goal.map(() => 0)))
+    let shown = shownSpaces.get(spaces)
+    if (!shown) shownSpaces.set(spaces, (shown = goal.map(() => 0)))
     goal.forEach((_, space) => {
       shown![space] = shown![space]! + (seen.level[space]! - shown![space]!) * ease
       if (shown![space]! <= 0.005) return
-      for (const r of spaceRects(plan, space)) areas.push({ x0: inside.x + r.x, y0: inside.y + r.y, x1: inside.x + r.x + r.w, y1: inside.y + r.y + r.h, level: shown![space]! })
+      areas.push({ region: spaces.spaces[space]!.region, bounds: spaces.spaces[space]!.bounds, level: shown![space]! })
     })
-  } else {
-    const c = inside.layout.floor[0]
-    if (c?.kind === 'circle') {
-      const goal = roomLevel(lit.allOn ? s.sources.length : onSources(s.sources).length, Math.PI * c.r * c.r, Math.min(s.floor, caveLevel(s.level).floors - 1))
-      const now = (shownChamber.get(inside.layout) ?? 0) + (goal - (shownChamber.get(inside.layout) ?? 0)) * ease
-      shownChamber.set(inside.layout, now)
-      areas.push({ cx: inside.x + c.x, cy: inside.y + c.y, r: c.r, level: now })
-    }
   }
 
   // A glow shows once its room has been entered (a corridor's, once a player is near).
@@ -166,8 +159,8 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
   // weaker the farther its space is from the players (`factor`), eased in and blinking out at the end.
   s.sources.forEach((k, i) => {
     if (!(lit.allOn || k.on)) return
-    const space = plan ? spaceAt(plan, k.x, k.y) : -1
-    if (plan && space >= 0 && !spaceVisited(space)) return
+    const space = spaces ? hostOf(spaces, k.x, k.y) : -1
+    if (space >= 0 && !spaceVisited(space)) return
     const a = space >= 0 ? (factor[space] ?? 1) : 1
     const x = inside.x + k.x
     const y = inside.y + k.y - 6
@@ -232,8 +225,11 @@ export const drawCaveDark = (ctx: Ctx, g: Game, inside: PlaceInteriorOf<'cave'>,
       const mask = sd <= 0 ? 1 : 1 - smooth(sd / rim)
       let dark = 1
       if (mask > 0.002) {
+        const fx = wx - inside.x
+        const fy = wy - inside.y
         for (const a of areas) {
-          const d = 'cx' in a ? Math.max(0, Math.hypot(wx - a.cx, wy - a.cy) - a.r) : boxDist(wx, wy, a.x0, a.y0, a.x1, a.y1)
+          if (fx < a.bounds.x0 - spill || fx > a.bounds.x1 + spill || fy < a.bounds.y0 - spill || fy > a.bounds.y1 + spill) continue
+          const d = Math.max(0, regionSdf(a.region, fx, fy))
           if (d >= spill) continue
           dark *= 1 - a.level * (1 - smooth(d / spill))
         }

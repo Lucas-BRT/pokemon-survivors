@@ -3,8 +3,9 @@ import { mazeSitesNear } from '../game/grandMaze'
 import { seenCells } from './mazeSight'
 import { caveFog, fogKey, lit, SEEN_SCALE } from './caveSight'
 import { shownLevels } from './caveDark'
-import { spaceAt } from '../game/dungeon'
-import { atDepth, spaceRects } from '../game/lightSources'
+import { caveLevel } from '../data/caveLevels'
+import { atDepth } from '../game/lightSources'
+import { chamberOf, hostOf, spacesOf, type Shape } from '../game/spaces'
 import type { PlaceInteriorOf } from '../game/place'
 import { context2d, createCanvas, fromStrings, lazy, blitPacked, textSprite, type Palette, type PixelSprite } from '../engine/pixelart'
 import { hash2 } from '../engine/rng'
@@ -399,35 +400,62 @@ const LIGHT_WARM = [255, 236, 160] as const
  * dark draws, `shownLevels`): nearly black when nobody lit it (the deeper the floor the darker it starts), warm as its light sources
  * come on, and a dot on each source (bright when on, dim when off) in the spaces already seen.
  */
-/** Fills a floor rectangle (room px) on the map by its corners, so neighbors never grow by rounding each one's size on its own. */
-const fillMapRect = (ctx: Ctx, v: View, inside: PlaceInteriorOf<'cave'>, r: { x: number; y: number; w: number; h: number }) => {
-  const x0 = Math.round((inside.x + r.x) / v.scale - v.ox)
-  const y0 = Math.round((inside.y + r.y) / v.scale - v.oy)
-  const x1 = Math.round((inside.x + r.x + r.w) / v.scale - v.ox)
-  const y1 = Math.round((inside.y + r.y + r.h) / v.scale - v.oy)
-  ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0))
+/** Fills a shape of a cave's space (floor px) on the map: a rectangle by its corners, so neighbors never grow by rounding each one's size on its own; a circle; or a polygon (even convex or not) a row at a time. */
+const fillMapShape = (ctx: Ctx, v: View, inside: PlaceInteriorOf<'cave'>, s: Shape) => {
+  if (s.kind === 'circle') return fillEllipse(ctx, v, inside.x + s.x, inside.y + s.y, s.r, s.r)
+  if (s.kind === 'rect') {
+    const x0 = Math.round((inside.x + s.x) / v.scale - v.ox)
+    const y0 = Math.round((inside.y + s.y) / v.scale - v.oy)
+    const x1 = Math.round((inside.x + s.x + s.w) / v.scale - v.ox)
+    const y1 = Math.round((inside.y + s.y + s.h) / v.scale - v.oy)
+    return ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0))
+  }
+  const pts = s.pts.map(([x, y]) => [(inside.x + x) / v.scale - v.ox, (inside.y + y) / v.scale - v.oy] as const)
+  const ys = pts.map((p) => p[1])
+  for (let py = Math.floor(Math.min(...ys)); py <= Math.ceil(Math.max(...ys)); py++) {
+    const yc = py + 0.5
+    // The even-odd rule: where the row crosses an edge, in order; it is inside between the 1st and 2nd crossing, the 3rd and 4th…
+    const xs: number[] = []
+    for (let j = 0, k = pts.length - 1; j < pts.length; k = j++) {
+      const [ax, ay] = pts[k]!
+      const [bx, by] = pts[j]!
+      if (ay > yc !== by > yc) xs.push(ax + ((yc - ay) / (by - ay)) * (bx - ax))
+    }
+    xs.sort((a, b) => a - b)
+    for (let i = 0; i + 1 < xs.length; i += 2) ctx.fillRect(Math.round(xs[i]!), py, Math.max(1, Math.round(xs[i + 1]!) - Math.round(xs[i]!)), 1)
+  }
 }
 
+/**
+ * What the team has lit of a cave floor, on the map: every visited space (a room, a corridor, the round treasure chamber: whatever its
+ * shape, `game/spaces.ts`) takes a tint by its level of light (the one the dark draws, `shownLevels`): nearly black when nobody lit it (the
+ * deeper the floor the darker it starts), warm as its light sources come on, and a dot on each source (bright when on, dim when off) in
+ * the spaces already seen.
+ */
 const drawCaveLight = (ctx: Ctx, v: View, inside: PlaceInteriorOf<'cave'>) => {
   const plan = inside.state.plan
-  const shown = plan ? shownLevels(plan) : undefined
-  if (!plan || !shown) return
-  const base = atDepth(lit, inside.state.floor).floor
+  const circle = inside.layout.floor[0]
+  const map = plan ? spacesOf(plan) : circle?.kind === 'circle' ? chamberOf(inside.layout, circle) : null
+  const shown = map ? shownLevels(map) : undefined
+  if (!map || !shown) return
+  // The chamber is the deepest the stairs go: the last floor's darkness.
+  const base = atDepth(lit, plan ? inside.state.floor : Math.min(inside.state.floor, caveLevel(inside.state.level).floors - 1)).floor
   shown.forEach((level, space) => {
     if (level <= 0.001) return
     // 0 (the floor of a visited room at the cave's depth) .. 1 (the most any number of sources lights a room to).
     const k = Math.max(0, Math.min(1, (level - base) / Math.max(0.01, lit.max - base)))
     const dim = 1 - Math.min(1, level / lit.max)
+    const region = map.spaces[space]!.region
     // Unlit: a dark veil, deeper where the floor starts darker; lit: the warm light over it.
     ctx.fillStyle = `rgba(${LIGHT_DARK[0]},${LIGHT_DARK[1]},${LIGHT_DARK[2]},${(0.55 * dim).toFixed(3)})`
-    for (const r of spaceRects(plan, space)) fillMapRect(ctx, v, inside, r)
+    for (const shape of region) fillMapShape(ctx, v, inside, shape)
     if (k > 0.02) {
       ctx.fillStyle = `rgba(${LIGHT_WARM[0]},${LIGHT_WARM[1]},${LIGHT_WARM[2]},${(0.5 * k).toFixed(3)})`
-      for (const r of spaceRects(plan, space)) fillMapRect(ctx, v, inside, r)
+      for (const shape of region) fillMapShape(ctx, v, inside, shape)
     }
   })
   for (const k of inside.state.sources) {
-    const space = spaceAt(plan, k.x, k.y)
+    const space = hostOf(map, k.x, k.y)
     if (space < 0 || (shown[space] ?? 0) <= 0.001) continue
     const x = Math.round((inside.x + k.x) / v.scale - v.ox)
     const y = Math.round((inside.y + k.y) / v.scale - v.oy)
@@ -567,7 +595,7 @@ export const drawMinimap = (ctx: Ctx, g: Game, shape: MinimapShape, t: number) =
     const inside = g.place.inside
     // A cave floor is a maze to find the way through: only what the team has lit shows, the stairs once seen.
     const seen = inside?.id === 'cave' && inside.state.plan ? caveFog(g, inside.state.plan, inside.state.visited, inside.x, inside.y) : null
-    if (inside?.id === 'cave' && inside.state.plan) drawCaveLight(ctx, v, inside)
+    if (inside?.id === 'cave') drawCaveLight(ctx, v, inside)
     if (seen) drawFog(ctx, v, seen)
     const stairs = inside?.id === 'cave' ? inside.state.stairs : null
     if (inside && stairs) {
